@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PossKassa — Demo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;color:#1e293b}
+/* Layout */
+.app{display:flex;height:100vh}
+.sidebar{width:220px;background:#0f172a;color:#94a3b8;display:flex;flex-direction:column;flex-shrink:0}
+.sidebar .logo{padding:20px 16px;border-bottom:1px solid #1e293b}
+.sidebar .logo h1{color:#fff;font-size:18px;font-weight:700}
+.sidebar .logo p{font-size:11px;margin-top:2px;color:#64748b}
+.sidebar nav{flex:1;padding:12px 8px}
+.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:none;background:none;color:#94a3b8;border-radius:8px;cursor:pointer;font-size:13px;text-align:left;transition:.15s}
+.nav-btn:hover{background:#1e293b;color:#fff}
+.nav-btn.active{background:#1d4ed8;color:#fff}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.topbar h2{font-size:15px;font-weight:600;color:#1e293b}
+.content{flex:1;overflow-y:auto;padding:24px}
+/* Cards */
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.card{background:#fff;border-radius:12px;padding:20px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.card h3{font-size:12px;color:#64748b;font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+.card .val{font-size:26px;font-weight:700;color:#1e293b}
+.card .sub{font-size:12px;color:#94a3b8;margin-top:4px}
+/* Table */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{background:#f8fafc;padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0}
+.tbl td{padding:11px 14px;border-bottom:1px solid #f1f5f9}
+.tbl tr:hover td{background:#f8fafc}
+.tbl tr:last-child td{border:none}
+/* Buttons */
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+.btn-blue{background:#2563eb;color:#fff}.btn-blue:hover{background:#1d4ed8}
+.btn-green{background:#16a34a;color:#fff}.btn-green:hover{background:#15803d}
+.btn-red{background:#dc2626;color:#fff}.btn-red:hover{background:#b91c1c}
+.btn-gray{background:#f1f5f9;color:#374151;border:1px solid #e2e8f0}.btn-gray:hover{background:#e2e8f0}
+/* Badge */
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.badge-green{background:#dcfce7;color:#15803d}
+.badge-blue{background:#dbeafe;color:#1d4ed8}
+.badge-yellow{background:#fef9c3;color:#a16207}
+.badge-red{background:#fee2e2;color:#dc2626}
+/* Form */
+.form-row{display:grid;gap:12px;margin-bottom:14px}
+.form-row.cols-2{grid-template-columns:1fr 1fr}
+.form-row.cols-3{grid-template-columns:1fr 1fr 1fr}
+label{display:block;font-size:12px;font-weight:500;color:#374151;margin-bottom:4px}
+input,select{width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;transition:.15s}
+input:focus,select:focus{border-color:#2563eb}
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal{background:#fff;border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}
+.modal-header h3{font-size:16px;font-weight:700}
+.modal-body{padding:20px 24px}
+.modal-footer{padding:16px 24px;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-end}
+/* POS */
+.pos-layout{display:grid;grid-template-columns:1fr 360px;gap:16px;height:calc(100vh - 52px - 48px)}
+.pos-left{display:flex;flex-direction:column;gap:12px}
+.pos-right{background:#fff;border-radius:12px;border:1px solid #e2e8f0;display:flex;flex-direction:column;overflow:hidden}
+.cart-items{flex:1;overflow-y:auto;padding:12px}
+.cart-item{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;border:1px solid #f1f5f9;margin-bottom:6px}
+.cart-item .name{flex:1;font-size:13px;font-weight:500}
+.cart-total{padding:12px;border-top:1px solid #e2e8f0}
+.total-row{display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px}
+.total-row.big{font-size:20px;font-weight:700;color:#1e293b;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:4px}
+.qty-btn{width:26px;height:26px;border-radius:50%;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.1s}
+.qty-btn:hover{background:#dbeafe;border-color:#93c5fd}
+/* Search */
+.search-box{position:relative}
+.search-box input{padding-left:36px}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:16px;pointer-events:none}
+/* Tabs */
+.tabs{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-radius:10px;width:fit-content;margin-bottom:20px}
+.tab{padding:7px 16px;border-radius:7px;border:none;background:none;font-size:13px;font-weight:500;cursor:pointer;color:#64748b;transition:.15s}
+.tab.active{background:#fff;color:#1e293b;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+/* Chart */
+.bar-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px 0}
+.bar-chart .bar{flex:1;border-radius:4px 4px 0 0;background:#2563eb;min-height:4px;transition:.3s}
+.bar-chart .bar:hover{background:#1d4ed8;opacity:.8}
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:#1e293b;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:999;transform:translateY(100px);opacity:0;transition:.3s;max-width:320px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{background:#15803d}
+.toast.err{background:#dc2626}
+/* Intake */
+.drop-zone{border:2px dashed #cbd5e1;border-radius:12px;padding:40px;text-align:center;cursor:pointer;transition:.2s}
+.drop-zone:hover,.drop-zone.drag{border-color:#2563eb;background:#eff6ff}
+.drop-zone .icon{font-size:36px;margin-bottom:8px}
+.review-row{display:grid;grid-template-columns:auto 1fr 80px 90px 100px 70px;gap:8px;align-items:center;padding:8px;border-bottom:1px solid #f1f5f9;font-size:12px}
+.review-row.hdr{font-weight:600;color:#64748b;font-size:11px;text-transform:uppercase;background:#f8fafc;border-radius:8px 8px 0 0}
+</style>
+</head>
+<body>
+<div class="app">
+ <!-- Sidebar -->
+ <aside class="sidebar">
+  <div class="logo"><h1>PossKassa</h1><p>Demo v1.0</p></div>
+  <nav>
+   <button class="nav-btn active" onclick="show('dashboard')">📊 Dashboard</button>
+   <button class="nav-btn" onclick="show('pos')">🛒 Kassa (POS)</button>
+   <button class="nav-btn" onclick="show('products')">📦 Mahsulotlar</button>
+   <button class="nav-btn" onclick="show('intake')">🚛 Tovar qabuli</button>
+   <button class="nav-btn" onclick="show('reports')">📈 Hisobotlar</button>
+   <button class="nav-btn" onclick="show('sales')">🧾 Sotuvlar</button>
+  </nav>
+ </aside>
+ <!-- Main -->
+ <div class="main">
+  <div class="topbar">
+   <h2 id="page-title">Dashboard</h2>
+   <div style="display:flex;align-items:center;gap:12px">
+    <span id="online-badge" class="badge badge-green">🟢 Online</span>
+    <span style="font-size:13px;color:#64748b">Demo Menejer</span>
+   </div>
+  </div>
+  <div class="content" id="main-content"></div>
+ </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const API = 'http://localhost:8000/api/v1';
+const fmt = n => new Intl.NumberFormat('uz-UZ').format(Math.round(n)) + " so'm";
+const pct = n => parseFloat(n).toFixed(1) + '%';
+let cart = [], allProducts = [];
+
+async function api(method, path, body) {
+  try {
+    const r = await fetch(API + path, {
+      method, headers: {'Content-Type':'application/json'},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    return r.json();
+  } catch(e) { return {error: e.message}; }
+}
+
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function show(page) {
+  document.querySelectorAll('.nav-btn').forEach((b,i) => {
+    const pages = ['dashboard','pos','products','intake','reports','sales'];
+    b.classList.toggle('active', pages[i] === page);
+  });
+  const titles = {dashboard:'📊 Dashboard', pos:'🛒 Kassa Terminali',
+    products:'📦 Mahsulotlar', intake:'🚛 Tovar Qabuli (Kirim)',
+    reports:'📈 Hisobotlar', sales:'🧾 Sotuvlar'};
+  document.getElementById('page-title').textContent = titles[page];
+  ({dashboard, pos, products, intake, reports, sales})[page]();
+}
+
+// ═══════════════════ DASHBOARD ═══════════════════
+async function dashboard() {
+  const el = document.getElementById('main-content');
+  el.innerHTML = '<p style="color:#94a3b8;padding:20px">Yuklanmoqda...</p>';
+  const [dash, top] = await Promise.all([
+    api('GET','/dashboard'),
+    api('GET','/reports/top-products')
+  ]);
+  const t = dash.today || {};
+  const payBreak = (dash.payment_breakdown||[]).map(p =>
+    `<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #f1f5f9">
+      <span style="color:#64748b;text-transform:capitalize">${p.method}</span>
+      <span style="font-weight:600">${fmt(p.total||0)}</span>
+    </div>`
+  ).join('');
+
+  const topRows = (top||[]).slice(0,8).map((p,i) => `
+    <tr>
+      <td><span style="color:#94a3b8">${i+1}</span></td>
+      <td style="font-weight:500">${p.product_name||'-'}</td>
+      <td style="text-align:right">${(p.total_qty||0).toFixed(1)}</td>
+      <td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.total_revenue||0)}</td>
+    </tr>`).join('');
+
+  const maxRev = Math.max(...(top||[]).map(p=>p.total_revenue||0), 1);
+  const bars = (top||[]).slice(0,10).map(p => {
+    const h = Math.max(6, (p.total_revenue/maxRev)*100);
+    return `<div class="bar" style="height:${h}%" title="${p.product_name}: ${fmt(p.total_revenue||0)}"></div>`;
+  }).join('');
+
+  el.innerHTML = `
+  <div class="grid-4">
+    <div class="card"><h3>Bugungi sotuvlar</h3><div class="val">${t.sales_count||0}</div><div class="sub">ta sotuv</div></div>
+    <div class="card"><h3>Bugungi daromad</h3><div class="val" style="color:#15803d">${fmt(t.revenue||0)}</div></div>
+    <div class="card"><h3>O'rtacha chek</h3><div class="val" style="color:#7c3aed">${fmt(t.avg_check||0)}</div></div>
+    <div class="card"><h3>Mahsulot turi</h3><div class="val" style="color:#d97706" id="prod-count">-</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Top mahsulotlar (daromad)</h3>
+      <div class="bar-chart">${bars}</div>
+      <table class="tbl" style="margin-top:12px">
+        <thead><tr><th>#</th><th>Mahsulot</th><th style="text-align:right">Miqdor</th><th style="text-align:right">Daromad</th></tr></thead>
+        <tbody>${topRows}</tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>To'lov usullari</h3>
+      <div style="margin-top:8px">${payBreak || '<p style="color:#94a3b8;text-align:center;padding:20px">Sotuv yo\'q</p>'}</div>
+    </div>
+  </div>`;
+  api('GET','/products').then(d => {
+    document.getElementById('prod-count').textContent = (d||[]).length;
+  });
+}
+
+// ═══════════════════ POS TERMINAL ═══════════════════
+async function pos() {
+  allProducts = await api('GET','/products');
+  const el = document.getElementById('main-content');
+  el.innerHTML = `
+  <div class="pos-layout">
+    <div class="pos-left">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input id="pos-search" placeholder="Mahsulot nomi yoki shtrixkod..." oninput="posSearch(this.value)" autofocus>
+      </div>
+      <div id="pos-results" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px"></div>
+    </div>
+    <div class="pos-right">
+      <div style="padding:14px 16px;border-bottom:1px solid #e2e8f0;font-weight:700;font-size:14px">🛒 Savatcha</div>
+      <div class="cart-items" id="cart-items">
+        <div style="text-align:center;color:#94a3b8;padding:40px 20px;font-size:13px">Savatcha bo'sh.<br>Mahsulot qo'shing.</div>
+      </div>
+      <div class="cart-total">
+        <div class="total-row"><span>Mahsulotlar:</span><span id="cart-count">0 ta</span></div>
+        <div class="total-row"><span>QQS (12%):</span><span id="cart-vat">0 so'm</span></div>
+        <div class="total-row big"><span>JAMI:</span><span id="cart-total" style="color:#2563eb">0 so'm</span></div>
+        <button class="btn btn-blue" style="width:100%;margin-top:10px;padding:13px;font-size:15px" onclick="openPayment()">💳 To'lov</button>
+        <button class="btn btn-gray" style="width:100%;margin-top:6px" onclick="cart=[];renderCart()">🗑 Tozalash</button>
+      </div>
+    </div>
+  </div>`;
+  posSearch('');
+}
+
+function posSearch(q) {
+  const filtered = q ? allProducts.filter(p =>
+    p.name.toLowerCase().includes(q.toLowerCase()) || (p.barcode||'').includes(q)
+  ) : allProducts.slice(0, 24);
+  document.getElementById('pos-results').innerHTML = filtered.map(p => `
+    <div onclick="addToCart('${p.id}')" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px;cursor:pointer;transition:.15s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px">${p.name}</div>
+      <div style="font-size:11px;color:#94a3b8">${p.barcode||p.unit}</div>
+      <div style="font-weight:700;color:#2563eb;margin-top:6px">${fmt(p.price)}</div>
+      <div style="font-size:11px;color:${p.stock_qty<20?'#dc2626':'#16a34a'};margin-top:2px">Zaxira: ${p.stock_qty||0}</div>
+    </div>`).join('');
+}
+
+function addToCart(pid) {
+  const p = allProducts.find(x=>x.id===pid); if(!p) return;
+  const ex = cart.find(c=>c.product.id===pid);
+  if(ex) ex.quantity++;
+  else cart.push({product:p, quantity:1});
+  renderCart();
+  toast(`✅ ${p.name} qo'shildi`);
+}
+
+function renderCart() {
+  const el = document.getElementById('cart-items');
+  if(!cart.length){
+    el.innerHTML='<div style="text-align:center;color:#94a3b8;padding:40px 20px;font-size:13px">Savatcha bo\'sh.<br>Mahsulot qo\'shing.</div>';
+    document.getElementById('cart-total').textContent='0 so\'m';
+    document.getElementById('cart-count').textContent='0 ta';
+    document.getElementById('cart-vat').textContent='0 so\'m';
+    return;
+  }
+  el.innerHTML = cart.map((c,i)=>`
+    <div class="cart-item">
+      <button class="qty-btn" onclick="updateQty(${i},-1)">−</button>
+      <div class="name">
+        <div>${c.product.name}</div>
+        <div style="font-size:11px;color:#94a3b8">${fmt(c.product.price)} × ${c.quantity}</div>
+      </div>
+      <button class="qty-btn" onclick="updateQty(${i},1)">+</button>
+      <div style="font-weight:700;color:#2563eb;min-width:80px;text-align:right">${fmt(c.product.price*c.quantity)}</div>
+      <button class="qty-btn" style="color:#dc2626" onclick="removeFromCart(${i})">✕</button>
+    </div>`).join('');
+  const total = cart.reduce((s,c)=>s+c.product.price*c.quantity,0);
+  const vat   = total * 12 / 112;
+  document.getElementById('cart-total').textContent=fmt(total);
+  document.getElementById('cart-count').textContent=`${cart.length} tur`;
+  document.getElementById('cart-vat').textContent=fmt(vat);
+}
+
+function updateQty(i,d){
+  cart[i].quantity+=d;
+  if(cart[i].quantity<=0) cart.splice(i,1);
+  renderCart();
+}
+function removeFromCart(i){ cart.splice(i,1); renderCart(); }
+
+function openPayment() {
+  if(!cart.length){toast('Savatcha bo\'sh!','err');return;}
+  const total = cart.reduce((s,c)=>s+c.product.price*c.quantity,0);
+  document.body.insertAdjacentHTML('beforeend',`
+  <div class="modal-bg" id="pay-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>💳 To'lov</h3><button class="btn btn-gray" onclick="document.getElementById('pay-modal').remove()">✕</button></div>
+      <div class="modal-body">
+        <div style="background:#eff6ff;border-radius:10px;padding:16px;text-align:center;margin-bottom:16px">
+          <div style="font-size:12px;color:#64748b">To'lash kerak</div>
+          <div style="font-size:32px;font-weight:800;color:#2563eb">${fmt(total)}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+          ${['💵 Naqd','💳 Uzcard','📱 Payme','📱 Click','💳 Humo','📱 Uzum'].map((m,i)=>`
+          <button onclick="selectPayMethod(this,'${['cash','uzcard','payme','click','humo','uzum'][i]}')"
+            style="padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:500;transition:.15s"
+            class="pay-method-btn">${m}</button>`).join('')}
+        </div>
+        <input id="cash-input" type="number" placeholder="Naqd miqdor kiriting..." style="margin-bottom:12px" value="${total}">
+        <div id="change-box" style="display:none;background:#f0fdf4;border-radius:8px;padding:12px;display:flex;justify-content:space-between">
+          <span style="color:#15803d;font-weight:600">Qaytim:</span>
+          <span id="change-val" style="color:#15803d;font-weight:700"></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('pay-modal').remove()">Bekor</button>
+        <button class="btn btn-green" onclick="completeSale(${total})">✅ To'landi</button>
+      </div>
+    </div>
+  </div>`);
+  document.querySelector('.pay-method-btn').style.cssText='padding:10px;border:2px solid #2563eb;border-radius:8px;background:#eff6ff;cursor:pointer;font-size:12px;font-weight:500';
+  window._payMethod = 'cash';
+  document.getElementById('cash-input').addEventListener('input',e=>{
+    const ch=e.target.value-total;
+    const box=document.getElementById('change-box');
+    box.style.display=ch>0?'flex':'none';
+    document.getElementById('change-val').textContent=fmt(ch);
+  });
+}
+
+function selectPayMethod(btn,method){
+  window._payMethod=method;
+  document.querySelectorAll('.pay-method-btn').forEach(b=>b.style.cssText='padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:500');
+  btn.style.cssText='padding:10px;border:2px solid #2563eb;border-radius:8px;background:#eff6ff;cursor:pointer;font-size:12px;font-weight:500';
+}
+
+async function completeSale(total) {
+  const items = cart.map(c=>({
+    product_id:c.product.id, product_name:c.product.name,
+    quantity:c.quantity, unit_price:c.product.price,
+    total_price:c.product.price*c.quantity
+  }));
+  const sale = await api('POST','/sales',{
+    total_amount: total,
+    payment_method: window._payMethod||'cash',
+    payments:[{method:window._payMethod||'cash',amount:total}],
+    items
+  });
+  document.getElementById('pay-modal')?.remove();
+  cart=[]; renderCart();
+  toast(`✅ Sotuv amalga oshirildi! Chek: ${sale.receipt_number}`);
+}
+// ═══════════════════ MAHSULOTLAR ═══════════════════
+async function products() {
+  const el = document.getElementById('main-content');
+  el.innerHTML = '<p style="color:#94a3b8;padding:20px">Yuklanmoqda...</p>';
+  const prods = await api('GET','/products');
+  renderProducts(prods, el);
+}
+
+function renderProducts(prods, el) {
+  const rows = prods.map(p => {
+    const margin = p.margin_pct||0;
+    const stock  = (p.stock_levels||[{}])[0];
+    const qty    = stock.quantity||p.stock_qty||0;
+    const isLow  = qty < 20;
+    return `<tr>
+      <td style="font-weight:600">${p.name}</td>
+      <td style="font-family:monospace;font-size:12px;color:#64748b">${p.barcode||'—'}</td>
+      <td>${p.unit}</td>
+      <td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.price)}</td>
+      <td style="text-align:right;color:#64748b">${fmt(p.cost_price)}</td>
+      <td style="text-align:right"><span style="font-weight:600;color:${margin>0?'#16a34a':'#dc2626'}">${pct(margin)}</span></td>
+      <td style="text-align:center"><span class="badge ${isLow?'badge-red':'badge-green'}">${qty}</span></td>
+      <td style="text-align:center">
+        <button class="btn btn-gray" style="padding:4px 10px;font-size:11px" onclick="editProduct('${p.id}','${p.name.replace(/'/g,"\\'")}',${p.price},${p.cost_price},'${p.barcode||''}','${p.unit}')">✏️</button>
+        <button class="btn btn-red" style="padding:4px 10px;font-size:11px;margin-left:4px" onclick="deleteProduct('${p.id}','${p.name.replace(/'/g,"\\'")}')">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div class="search-box" style="flex:1;max-width:360px">
+      <span class="search-icon">🔍</span>
+      <input id="prod-search" placeholder="Qidirish: nom yoki shtrixkod..." oninput="filterProducts(this.value)">
+    </div>
+    <button class="btn btn-blue" onclick="openAddProduct()">➕ Yangi mahsulot</button>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="tbl" id="products-table">
+      <thead><tr>
+        <th>Mahsulot nomi</th><th>Shtrixkod</th><th>Birlik</th>
+        <th style="text-align:right">Narx</th><th style="text-align:right">Tannarx</th>
+        <th style="text-align:right">Marjin</th><th style="text-align:center">Zaxira</th><th style="text-align:center">Amal</th>
+      </tr></thead>
+      <tbody id="products-tbody">${rows}</tbody>
+    </table>
+  </div>`;
+  window._allProds = prods;
+}
+
+function filterProducts(q) {
+  const filtered = q ? window._allProds.filter(p =>
+    p.name.toLowerCase().includes(q.toLowerCase()) || (p.barcode||'').includes(q)
+  ) : window._allProds;
+  const rows = filtered.map(p => {
+    const margin = p.margin_pct||0; const qty = p.stock_qty||0; const isLow = qty<20;
+    return `<tr><td style="font-weight:600">${p.name}</td><td style="font-family:monospace;font-size:12px;color:#64748b">${p.barcode||'—'}</td><td>${p.unit}</td><td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.price)}</td><td style="text-align:right;color:#64748b">${fmt(p.cost_price)}</td><td style="text-align:right"><span style="font-weight:600;color:${margin>0?'#16a34a':'#dc2626'}">${pct(margin)}</span></td><td style="text-align:center"><span class="badge ${isLow?'badge-red':'badge-green'}">${qty}</span></td><td style="text-align:center"><button class="btn btn-gray" style="padding:4px 10px;font-size:11px" onclick="editProduct('${p.id}','${p.name.replace(/'/g,"\\'")}',${p.price},${p.cost_price},'${p.barcode||''}','${p.unit}')">✏️</button><button class="btn btn-red" style="padding:4px 10px;font-size:11px;margin-left:4px" onclick="deleteProduct('${p.id}','${p.name.replace(/'/g,"\\'")}')">🗑</button></td></tr>`;
+  }).join('');
+  document.getElementById('products-tbody').innerHTML = rows;
+}
+
+function openAddProduct() {
+  document.body.insertAdjacentHTML('beforeend',`
+  <div class="modal-bg" id="add-prod-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>➕ Yangi mahsulot</h3><button class="btn btn-gray" onclick="document.getElementById('add-prod-modal').remove()">✕</button></div>
+      <div class="modal-body">
+        <div class="form-row"><div><label>Nomi *</label><input id="pn-name" placeholder="Non Obi 500g"></div></div>
+        <div class="form-row cols-2">
+          <div><label>Narx (so'm) *</label><input id="pn-price" type="number" min="0" placeholder="15000"></div>
+          <div><label>Tannarx (so'm)</label><input id="pn-cost" type="number" min="0" placeholder="10000"></div>
+        </div>
+        <div class="form-row cols-2">
+          <div><label>Shtrixkod</label><input id="pn-barcode" placeholder="4600001234567"></div>
+          <div><label>Birlik</label><select id="pn-unit"><option value="pcs">Dona</option><option value="kg">Kilogramm</option><option value="l">Litr</option><option value="m">Metr</option><option value="box">Quti</option></select></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('add-prod-modal').remove()">Bekor</button>
+        <button class="btn btn-blue" onclick="saveNewProduct()">💾 Saqlash</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+async function saveNewProduct() {
+  const name=document.getElementById('pn-name').value.trim();
+  const price=parseFloat(document.getElementById('pn-price').value)||0;
+  if(!name||!price){toast('Nom va narx to\'ldirilishi shart!','err');return;}
+  const res = await api('POST','/products',{
+    name, price, cost_price:parseFloat(document.getElementById('pn-cost').value)||0,
+    barcode:document.getElementById('pn-barcode').value||null,
+    unit:document.getElementById('pn-unit').value
+  });
+  document.getElementById('add-prod-modal')?.remove();
+  toast(`✅ "${res.name}" qo'shildi!`);
+  products();
+}
+
+function editProduct(id,name,price,cost,barcode,unit){
+  document.body.insertAdjacentHTML('beforeend',`
+  <div class="modal-bg" id="edit-prod-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>✏️ Tahrirlash</h3><button class="btn btn-gray" onclick="document.getElementById('edit-prod-modal').remove()">✕</button></div>
+      <div class="modal-body">
+        <div class="form-row"><div><label>Nomi</label><input id="ep-name" value="${name}"></div></div>
+        <div class="form-row cols-2">
+          <div><label>Narx</label><input id="ep-price" type="number" value="${price}"></div>
+          <div><label>Tannarx</label><input id="ep-cost" type="number" value="${cost}"></div>
+        </div>
+        <div class="form-row cols-2">
+          <div><label>Shtrixkod</label><input id="ep-barcode" value="${barcode}"></div>
+          <div><label>Birlik</label><select id="ep-unit">${['pcs','kg','l','m','box'].map(u=>`<option value="${u}" ${u===unit?'selected':''}>${{pcs:'Dona',kg:'Kg',l:'Litr',m:'Metr',box:'Quti'}[u]}</option>`).join('')}</select></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('edit-prod-modal').remove()">Bekor</button>
+        <button class="btn btn-blue" onclick="saveEditProduct('${id}')">💾 Saqlash</button>
+      </div>
+    </div>
+  </div>`);
+}
+async function saveEditProduct(id){
+  await api('PUT',`/products/${id}`,{
+    name:document.getElementById('ep-name').value,
+    price:parseFloat(document.getElementById('ep-price').value),
+    cost_price:parseFloat(document.getElementById('ep-cost').value),
+    barcode:document.getElementById('ep-barcode').value,
+    unit:document.getElementById('ep-unit').value
+  });
+  document.getElementById('edit-prod-modal')?.remove();
+  toast('✅ Mahsulot yangilandi!'); products();
+}
+async function deleteProduct(id,name){
+  if(!confirm(`"${name}" o'chirilsinmi?`)) return;
+  await api('DELETE',`/products/${id}`);
+  toast(`🗑 "${name}" o'chirildi`,'err'); products();
+}
+// ═══════════════════ INTAKE ═══════════════════
+async function intake() {
+  const el = document.getElementById('main-content');
+  const drafts = await api('GET','/intake/drafts') || [];
+  const draftRows = drafts.map(d=>{
+    const badges = {review_pending:'badge-yellow',approved:'badge-green',rejected:'badge-red',extracting:'badge-blue'};
+    const labels = {review_pending:'Tekshiruv kutilmoqda',approved:'Tasdiqlangan',rejected:'Rad etilgan',extracting:'Tahlil qilinmoqda'};
+    return `<tr>
+      <td>${d.source?.toUpperCase()||'—'}</td>
+      <td><span class="badge ${badges[d.status]||'badge-blue'}">${labels[d.status]||d.status}</span></td>
+      <td style="text-align:center">${d.rows_count||0}</td>
+      <td style="font-size:11px;color:#94a3b8">${(d.created_at||'').slice(0,16)}</td>
+      <td>${d.status==='review_pending'?`<button class="btn btn-blue" style="padding:4px 10px;font-size:11px" onclick="reviewDraft('${d.id}')">👁 Tekshirish</button>`:''}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+  <div class="grid-2" style="margin-bottom:24px">
+    <div class="card">
+      <h3 style="margin-bottom:16px">📋 Yangi kirim yaratish</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <button onclick="simulateIntake('photo')" style="padding:16px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;text-align:center;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
+          <div style="font-size:28px">📷</div><div style="font-size:12px;font-weight:600;margin-top:6px">Foto OCR</div><div style="font-size:11px;color:#94a3b8">Claude Vision</div>
+        </button>
+        <button onclick="simulateIntake('csv')" style="padding:16px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;text-align:center;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
+          <div style="font-size:28px">📊</div><div style="font-size:12px;font-weight:600;margin-top:6px">CSV/Excel</div><div style="font-size:11px;color:#94a3b8">Fayl yuklash</div>
+        </button>
+        <button onclick="simulateIntake('esf')" style="padding:16px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;text-align:center;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
+          <div style="font-size:28px">🧾</div><div style="font-size:12px;font-weight:600;margin-top:6px">ESF</div><div style="font-size:11px;color:#94a3b8">didox.uz</div>
+        </button>
+      </div>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px;font-size:12px;color:#92400e">
+        ⚠️ <strong>Muhim:</strong> Barcha kirimlar inson tekshiruvidan o'tgandan keyingina bazaga saqlanadi.
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:12px">📋 Kirim loyihalari (${drafts.length} ta)</h3>
+      ${drafts.length?`<table class="tbl"><thead><tr><th>Manba</th><th>Holat</th><th style="text-align:center">Qatorlar</th><th>Vaqt</th><th>Amal</th></tr></thead><tbody>${draftRows}</tbody></table>`:
+      '<p style="color:#94a3b8;text-align:center;padding:20px;font-size:13px">Hali kirim loyihasi yo\'q</p>'}
+    </div>
+  </div>`;
+}
+
+async function simulateIntake(source) {
+  toast(`⏳ ${source.toUpperCase()} orqali kirim boshlanmoqda...`);
+  const res = await api('POST',`/intake/${source}`, {});
+  if(res.draft_id) {
+    toast(`✅ ${res.rows_count} ta qator aniqlandi. Tekshirish uchun tayyor!`);
+    setTimeout(()=>reviewDraft(res.draft_id), 800);
+  }
+}
+
+async function reviewDraft(id) {
+  const draft = await api('GET',`/intake/drafts/${id}`);
+  const rows = draft.rows || [];
+  const rowHtml = rows.map((r,i)=>`
+    <div class="review-row" id="row-${i}">
+      <input type="checkbox" id="chk-${i}" checked onchange="toggleRow(${i})">
+      <input id="rname-${i}" value="${r.name||''}" style="font-size:12px">
+      <input id="rqty-${i}" type="number" value="${r.qty||1}" style="font-size:12px;text-align:right">
+      <input id="rcost-${i}" type="number" value="${r.unit_cost||0}" style="font-size:12px;text-align:right">
+      <div style="font-weight:600;color:#2563eb;font-size:12px" id="rtotal-${i}">${fmt((r.qty||1)*(r.unit_cost||0))}</div>
+      <span class="badge ${r._match?.action==='update_stock'?'badge-green':r._match?.action==='create_new'?'badge-blue':'badge-yellow'}" style="font-size:10px">${r._match?.action==='update_stock'?'Mavjud':r._match?.action==='create_new'?'Yangi':'Tanlash'}</span>
+    </div>`).join('');
+
+  document.body.insertAdjacentHTML('beforeend',`
+  <div class="modal-bg" id="review-modal">
+    <div class="modal" style="max-width:680px">
+      <div class="modal-header">
+        <h3>👁 Kirim Tekshiruvi — ${rows.length} ta qator</h3>
+        <button class="btn btn-gray" onclick="document.getElementById('review-modal').remove()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:16px">
+        <div style="background:#eff6ff;border-radius:8px;padding:10px;font-size:12px;color:#1d4ed8;margin-bottom:12px">
+          ✅ Tasdiqlangan qatorlar bazaga yoziladi. Belgi oling yoki tahrirlang.
+        </div>
+        <div class="review-row hdr">
+          <span>✓</span><span>Mahsulot nomi</span><span style="text-align:right">Miqdor</span>
+          <span style="text-align:right">Tannarx</span><span style="text-align:right">Jami</span><span>Holat</span>
+        </div>
+        <div style="max-height:320px;overflow-y:auto">${rowHtml}</div>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between">
+        <button class="btn btn-red" onclick="rejectDraft('${id}')">❌ Rad etish</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-gray" onclick="document.getElementById('review-modal').remove()">Bekor</button>
+          <button class="btn btn-green" onclick="approveDraft('${id}',${rows.length})">✅ Tasdiqlash</button>
+        </div>
+      </div>
+    </div>
+  </div>`);
+  window._draftRows = rows;
+}
+
+function toggleRow(i){
+  const el = document.getElementById(`row-${i}`);
+  el.style.opacity = document.getElementById(`chk-${i}`).checked ? '1' : '0.4';
+}
+
+async function approveDraft(id, count) {
+  const reviewed = window._draftRows.map((r,i)=>({
+    ...r,
+    name:     document.getElementById(`rname-${i}`)?.value || r.name,
+    qty:      parseFloat(document.getElementById(`rqty-${i}`)?.value)||r.qty,
+    unit_cost:parseFloat(document.getElementById(`rcost-${i}`)?.value)||r.unit_cost,
+    approved: document.getElementById(`chk-${i}`)?.checked !== false,
+    total_cost: (parseFloat(document.getElementById(`rqty-${i}`)?.value)||r.qty) * (parseFloat(document.getElementById(`rcost-${i}`)?.value)||r.unit_cost)
+  }));
+  const warehouses = await api('GET','/warehouses');
+  const wid = warehouses[0]?.id || 'wh-001';
+  const res = await api('POST',`/intake/drafts/${id}/approve`,{reviewed_rows:reviewed,warehouse_id:wid});
+  document.getElementById('review-modal')?.remove();
+  toast(`✅ ${res.items_count} ta tovar saqlandi! Chek: ${res.receipt_number}`);
+  intake();
+}
+async function rejectDraft(id){
+  await api('POST',`/intake/drafts/${id}/reject`,{reason:'Inson tomonidan rad etildi'});
+  document.getElementById('review-modal')?.remove();
+  toast('❌ Kirim rad etildi','err'); intake();
+}
+
+// ═══════════════════ HISOBOTLAR ═══════════════════
+async function reports() {
+  const el = document.getElementById('main-content');
+  el.innerHTML = `
+  <div class="tabs">
+    <button class="tab active" onclick="showReport('top',this)">📦 Top mahsulotlar</button>
+    <button class="tab" onclick="showReport('abc',this)">📊 ABC tahlil</button>
+    <button class="tab" onclick="showReport('margin',this)">💰 Marjinallik</button>
+    <button class="tab" onclick="showReport('cashier',this)">👤 Kassirlar</button>
+    <button class="tab" onclick="showReport('stock',this)">🏭 Ombor qiymati</button>
+  </div>
+  <div id="report-content"></div>`;
+  showReport('top', document.querySelector('.tab.active'));
+}
+
+async function showReport(type, btn) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  const el = document.getElementById('report-content');
+  el.innerHTML = '<p style="color:#94a3b8;padding:20px">Yuklanmoqda...</p>';
+
+  if(type==='top'){
+    const data = await api('GET','/reports/top-products');
+    el.innerHTML = `<div class="card" style="padding:0;overflow:hidden">
+      <table class="tbl"><thead><tr><th>#</th><th>Mahsulot</th><th style="text-align:right">Miqdor</th><th style="text-align:right">Daromad</th><th style="text-align:right">Foyda</th><th style="text-align:right">Sotuvlar</th></tr></thead>
+      <tbody>${(data||[]).map((p,i)=>`<tr><td style="color:#94a3b8">${i+1}</td><td style="font-weight:600">${p.product_name}</td><td style="text-align:right">${(p.total_qty||0).toFixed(1)}</td><td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.total_revenue||0)}</td><td style="text-align:right;color:#16a34a">${fmt(p.gross_profit||0)}</td><td style="text-align:right">${p.sale_count||0}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  if(type==='abc'){
+    const data = await api('GET','/reports/abc-analysis');
+    el.innerHTML = ['A','B','C'].map(g=>{
+      const grp = data[g]||{count:0,items:[]};
+      const colors={A:'#dcfce7',B:'#dbeafe',C:'#fef9c3'};
+      const tc={A:'#15803d',B:'#1d4ed8',C:'#a16207'};
+      return `<div class="card" style="margin-bottom:12px;border:1px solid ${colors[g]}">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:40px;height:40px;background:${colors[g]};color:${tc[g]};border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px">${g}</div>
+          <div><div style="font-weight:700">${grp.count} ta mahsulot</div><div style="font-size:12px;color:#64748b">${g==='A'?'Daromadning 80%':g==='B'?'Keyingi 15%':'Oxirgi 5%'}</div></div>
+        </div>
+        ${grp.items.slice(0,5).map(p=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #f1f5f9"><span>${p.product_name}</span><span style="font-weight:600">${fmt(p.total_revenue||0)} <span style="color:#94a3b8;font-weight:400">(${p.revenue_pct}%)</span></span></div>`).join('')}
+      </div>`;
+    }).join('');
+  }
+  if(type==='margin'){
+    const data = await api('GET','/reports/margin');
+    const s = data.summary||{};
+    el.innerHTML = `
+      <div class="grid-4" style="margin-bottom:16px">
+        <div class="card"><h3>Daromad</h3><div class="val">${fmt(s.total_revenue||0)}</div></div>
+        <div class="card"><h3>Tannarx</h3><div class="val">${fmt(s.total_cost||0)}</div></div>
+        <div class="card"><h3>Foyda</h3><div class="val" style="color:#16a34a">${fmt(s.total_profit||0)}</div></div>
+        <div class="card"><h3>O'rtacha marjin</h3><div class="val" style="color:#7c3aed">${pct(s.avg_margin_pct||0)}</div></div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="tbl"><thead><tr><th>Mahsulot</th><th style="text-align:right">Daromad</th><th style="text-align:right">Tannarx</th><th style="text-align:right">Foyda</th><th style="text-align:right">Marjin %</th></tr></thead>
+        <tbody>${(data.items||[]).map(p=>`<tr><td style="font-weight:500">${p.product_name}</td><td style="text-align:right">${fmt(p.revenue||0)}</td><td style="text-align:right;color:#64748b">${fmt(p.cost||0)}</td><td style="text-align:right;color:#16a34a;font-weight:600">${fmt(p.profit||0)}</td><td style="text-align:right"><span style="font-weight:700;color:${(p.margin_pct||0)>20?'#16a34a':(p.margin_pct||0)>0?'#d97706':'#dc2626'}">${pct(p.margin_pct||0)}</span></td></tr>`).join('')}</tbody>
+        </table></div>`;
+  }
+  if(type==='cashier'){
+    const data = await api('GET','/reports/cashier-performance');
+    el.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><table class="tbl"><thead><tr><th>#</th><th>Kassir</th><th style="text-align:right">Sotuvlar</th><th style="text-align:right">Daromad</th><th style="text-align:right">O'rtacha chek</th><th style="text-align:right">Ish kunlari</th></tr></thead>
+    <tbody>${(data||[]).map((c,i)=>`<tr><td style="color:#94a3b8">${i+1}</td><td style="font-weight:600">${c.cashier_name||'—'}</td><td style="text-align:right">${c.total_sales||0}</td><td style="text-align:right;font-weight:700;color:#2563eb">${fmt(c.total_revenue||0)}</td><td style="text-align:right">${fmt(c.avg_check||0)}</td><td style="text-align:right">${c.working_days||0} kun</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  if(type==='stock'){
+    const data = await api('GET','/reports/stock-value');
+    const s = data.summary||{};
+    el.innerHTML = `
+      <div class="grid-4" style="margin-bottom:16px">
+        <div class="card"><h3>Mahsulot turi</h3><div class="val">${s.total_items||0}</div></div>
+        <div class="card"><h3>Tannarxda qiymati</h3><div class="val">${fmt(s.total_cost_value||0)}</div></div>
+        <div class="card"><h3>Sotish qiymati</h3><div class="val" style="color:#2563eb">${fmt(s.total_retail_value||0)}</div></div>
+        <div class="card"><h3>Potensial foyda</h3><div class="val" style="color:#16a34a">${fmt(s.potential_profit||0)}</div></div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden"><table class="tbl"><thead><tr><th>Mahsulot</th><th style="text-align:right">Zaxira</th><th style="text-align:right">Tannarx</th><th style="text-align:right">Narx</th><th style="text-align:right">Qiymati (tannarx)</th><th style="text-align:right">Potensial foyda</th></tr></thead>
+      <tbody>${(data.items||[]).map(p=>`<tr><td style="font-weight:500">${p.product_name}</td><td style="text-align:right">${p.quantity} ${p.unit}</td><td style="text-align:right;color:#64748b">${fmt(p.cost_price||0)}</td><td style="text-align:right">${fmt(p.selling_price||0)}</td><td style="text-align:right;font-weight:600">${fmt(p.stock_cost_value||0)}</td><td style="text-align:right;color:#16a34a">${fmt(p.potential_profit||0)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+}
+
+// ═══════════════════ SOTUVLAR ═══════════════════
+async function sales() {
+  const el = document.getElementById('main-content');
+  const data = await api('GET','/sales');
+  const rows = (data||[]).map(s=>{
+    const m = {cash:'💵 Naqd',uzcard:'💳 Uzcard',humo:'💳 Humo',payme:'📱 Payme',click:'📱 Click',uzum:'📱 Uzum'};
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px">${s.receipt_number||'—'}</td>
+      <td style="font-size:12px;color:#64748b">${(s.sale_time||'').slice(0,16)}</td>
+      <td>${s.cashier||'—'}</td>
+      <td style="text-align:right;font-weight:700;color:#2563eb">${fmt(s.total_amount||0)}</td>
+      <td>${m[s.payment_method]||s.payment_method||'—'}</td>
+      <td><span class="badge badge-green">✓ ${s.sync_status||'synced'}</span></td>
+    </tr>`;
+  }).join('');
+  const total = (data||[]).reduce((s,x)=>s+(x.total_amount||0),0);
+  el.innerHTML = `
+  <div class="card" style="margin-bottom:16px;padding:12px 20px;display:flex;gap:24px;align-items:center">
+    <div><span style="font-size:12px;color:#64748b">Jami sotuvlar:</span> <strong>${(data||[]).length} ta</strong></div>
+    <div><span style="font-size:12px;color:#64748b">Jami daromad:</span> <strong style="color:#2563eb">${fmt(total)}</strong></div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="tbl"><thead><tr><th>Chek №</th><th>Vaqt</th><th>Kassir</th><th style="text-align:right">Summa</th><th>To'lov</th><th>Holat</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Sotuvlar yo\'q</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+// ═══════════════════ ISHGA TUSHIRISH ═══════════════════
+show('dashboard');
+</script>
+</body>
+</html>
