@@ -125,7 +125,7 @@ input:focus,select:focus{border-color:#2563eb}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const API = 'http://localhost:8000/api/v1';
+const API = `http://localhost:${location.port||3500}/api/v1`;
 const fmt = n => new Intl.NumberFormat('uz-UZ').format(Math.round(n)) + " so'm";
 const pct = n => parseFloat(n).toFixed(1) + '%';
 let cart = [], allProducts = [];
