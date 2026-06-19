@@ -17,7 +17,7 @@ import sys
 import urllib.parse
 from datetime import datetime, timezone
 
-PORT    = 5000
+PORT    = 4000
 DB_PATH = os.path.join(os.path.dirname(__file__), "posskassa.db")
 STATIC  = os.path.join(os.path.dirname(__file__), "static")
 
