@@ -1,0 +1,286 @@
+# ============================================================
+# PossKassa — Docker Compose (Ishlab chiqish muhiti)
+# Ishga tushirish: docker compose up -d
+# ============================================================
+
+name: posskassa
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks:
+    - posskassa-net
+  env_file: .env
+
+x-backend-defaults: &backend-defaults
+  <<: *service-defaults
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
+services:
+
+  # ─────────────────────────────────────────────────────────
+  # INFRATUZILMA
+  # ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    <<: *service-defaults
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-posskassa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret123}
+      POSTGRES_DB:       ${POSTGRES_DB:-posskassa}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-posskassa}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    <<: *service-defaults
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    <<: *service-defaults
+    environment:
+      RABBITMQ_DEFAULT_USER: posskassa
+      RABBITMQ_DEFAULT_PASS: ${POSTGRES_PASSWORD:-secret123}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # Boshqaruv paneli
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    <<: *service-defaults
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin123}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"   # MinIO konsoli
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    <<: *service-defaults
+    command: start-dev --import-realm
+    environment:
+      KC_DB:                postgres
+      KC_DB_URL:            jdbc:postgresql://postgres:5432/${POSTGRES_DB:-posskassa}
+      KC_DB_USERNAME:       ${POSTGRES_USER:-posskassa}
+      KC_DB_PASSWORD:       ${POSTGRES_PASSWORD:-secret123}
+      KEYCLOAK_ADMIN:       ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin123}
+      KC_HOSTNAME_STRICT:   "false"
+      KC_HTTP_ENABLED:      "true"
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    <<: *service-defaults
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ports:
+      - "8123:8123"   # HTTP
+      - "9009:9000"   # Native
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # ─────────────────────────────────────────────────────────
+  # BACKEND XIZMATLAR
+  # ─────────────────────────────────────────────────────────
+
+  gateway:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.python
+      args:
+        SERVICE: gateway
+    <<: *backend-defaults
+    ports:
+      - "8000:8000"
+    environment:
+      SERVICE_NAME: gateway
+      PORT: 8000
+    depends_on:
+      - postgres
+      - redis
+      - keycloak
+
+  sales-service:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.python
+      args:
+        SERVICE: sales
+    <<: *backend-defaults
+    ports:
+      - "8001:8001"
+    environment:
+      SERVICE_NAME: sales
+      PORT: 8001
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.python
+      args:
+        SERVICE: inventory
+    <<: *backend-defaults
+    ports:
+      - "8002:8002"
+    environment:
+      SERVICE_NAME: inventory
+      PORT: 8002
+
+  compliance-service:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.python
+      args:
+        SERVICE: compliance
+    <<: *backend-defaults
+    ports:
+      - "8003:8003"
+    environment:
+      SERVICE_NAME: compliance
+      PORT: 8003
+
+  intake-service:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.python
+      args:
+        SERVICE: intake
+    <<: *backend-defaults
+    ports:
+      - "8004:8004"
+    environment:
+      SERVICE_NAME: intake
+      PORT: 8004
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.python
+      args:
+        SERVICE: analytics
+    <<: *backend-defaults
+    ports:
+      - "8005:8005"
+    environment:
+      SERVICE_NAME: analytics
+      PORT: 8005
+
+  notifications-service:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.python
+      args:
+        SERVICE: notifications
+    <<: *backend-defaults
+    ports:
+      - "8006:8006"
+    environment:
+      SERVICE_NAME: notifications
+      PORT: 8006
+
+  # ─────────────────────────────────────────────────────────
+  # FRONTEND ILOVALAR
+  # ─────────────────────────────────────────────────────────
+
+  pos-terminal:
+    build:
+      context: apps/pos-terminal
+      dockerfile: ../../infra/docker/Dockerfile.node
+      args:
+        VITE_API_URL: http://localhost:8000/api/v1
+    <<: *service-defaults
+    ports:
+      - "3000:80"
+
+  backoffice:
+    build:
+      context: apps/backoffice
+      dockerfile: ../../infra/docker/Dockerfile.node
+      args:
+        VITE_API_URL: http://localhost:8000/api/v1
+    <<: *service-defaults
+    ports:
+      - "3001:80"
+
+  # ─────────────────────────────────────────────────────────
+  # NGINX (Teskari proksi)
+  # ─────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    <<: *service-defaults
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - gateway
+      - pos-terminal
+      - backoffice
+
+# ─────────────────────────────────────────────────────────
+# HAJMLAR
+# ─────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+  clickhouse_data:
+
+# ─────────────────────────────────────────────────────────
+# TARMOQ
+# ─────────────────────────────────────────────────────────
+networks:
+  posskassa-net:
+    driver: bridge

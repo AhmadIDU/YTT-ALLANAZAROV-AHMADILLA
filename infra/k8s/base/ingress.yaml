@@ -1,0 +1,57 @@
+# ============================================================
+# PossKassa — Kubernetes Ingress (Nginx Ingress Controller)
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: posskassa-ingress
+  namespace: posskassa
+  annotations:
+    kubernetes.io/ingress.class:           "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"    # Fayl yuklash uchun
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    cert-manager.io/cluster-issuer:        "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - api.posskassa.uz
+        - pos.posskassa.uz
+        - admin.posskassa.uz
+      secretName: posskassa-tls
+  rules:
+    # ─── API ────────────────────────────────────────
+    - host: api.posskassa.uz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 8000
+
+    # ─── Kassa terminali ────────────────────────────
+    - host: pos.posskassa.uz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pos-terminal-service
+                port:
+                  number: 80
+
+    # ─── Backoffice ─────────────────────────────────
+    - host: admin.posskassa.uz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backoffice-service
+                port:
+                  number: 80

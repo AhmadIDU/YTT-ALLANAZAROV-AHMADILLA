@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: posskassa-config
+  namespace: posskassa
+data:
+  APP_ENV:          "production"
+  LOG_LEVEL:        "INFO"
+  DB_ECHO:          "false"
+  KEYCLOAK_REALM:   "posskassa"
+  KEYCLOAK_URL:     "http://keycloak-service:8080"
+  REDIS_URL:        "redis://redis-service:6379/0"
+  RABBITMQ_URL:     "amqp://posskassa:$(RABBITMQ_PASSWORD)@rabbitmq-service:5672/"
+  S3_ENDPOINT:      "http://minio-service:9000"
+  S3_BUCKET:        "posskassa"
+  OFD_API_URL:      "https://ofd.soliq.uz/api"
+  DIDOX_API_URL:    "https://api.didox.uz/v1"
+  EIMZO_API_URL:    "https://eimzo.uz/api"

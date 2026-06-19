@@ -1,0 +1,132 @@
+# ============================================================
+# PossKassa — Kubernetes Service manifestlari
+# ============================================================
+
+# ─── API Gateway ────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-service
+  namespace: posskassa
+  labels:
+    app: gateway
+spec:
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# ─── Sotuv xizmati ──────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: sales-service
+  namespace: posskassa
+spec:
+  selector:
+    app: sales
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: ClusterIP
+---
+# ─── Tovar xizmati ──────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  namespace: posskassa
+spec:
+  selector:
+    app: inventory
+  ports:
+    - port: 8002
+      targetPort: 8002
+  type: ClusterIP
+---
+# ─── Muvofiqlik xizmati ─────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: compliance-service
+  namespace: posskassa
+spec:
+  selector:
+    app: compliance
+  ports:
+    - port: 8003
+      targetPort: 8003
+  type: ClusterIP
+---
+# ─── Kirim xizmati ──────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: intake-service
+  namespace: posskassa
+spec:
+  selector:
+    app: intake
+  ports:
+    - port: 8004
+      targetPort: 8004
+  type: ClusterIP
+---
+# ─── Tahlil xizmati ─────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: posskassa
+spec:
+  selector:
+    app: analytics
+  ports:
+    - port: 8005
+      targetPort: 8005
+  type: ClusterIP
+---
+# ─── Bildirishnoma xizmati ──────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifications-service
+  namespace: posskassa
+spec:
+  selector:
+    app: notifications
+  ports:
+    - port: 8006
+      targetPort: 8006
+  type: ClusterIP
+---
+# ─── Kassa terminali ────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: pos-terminal-service
+  namespace: posskassa
+spec:
+  selector:
+    app: pos-terminal
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+# ─── Backoffice ─────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: backoffice-service
+  namespace: posskassa
+spec:
+  selector:
+    app: backoffice
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP

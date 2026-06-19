@@ -1,0 +1,73 @@
+# ============================================================
+# PossKassa — Python xizmatlar uchun Dockerfile
+# Ko'p bosqichli build — kichik hajm
+# ============================================================
+
+ARG SERVICE=gateway
+
+# ── Bosqich 1: Dependencies ──────────────────────────────
+FROM python:3.12-slim AS builder
+
+ARG SERVICE
+WORKDIR /app
+
+# Tizim paketlari
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# pip yangilash
+RUN pip install --upgrade pip wheel
+
+# Requirements
+COPY services/${SERVICE}/requirements.txt ./requirements-service.txt
+COPY shared/python/requirements.txt       ./requirements-shared.txt
+
+RUN pip install --no-cache-dir --prefix=/install \
+    -r requirements-shared.txt \
+    -r requirements-service.txt
+
+# ── Bosqich 2: Runtime ───────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+ARG SERVICE
+ENV SERVICE=${SERVICE} \
+    PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Faqat kerakli tizim kutubxonalari
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Uzatilgan paketlar
+COPY --from=builder /install /usr/local
+
+# Manba kodi
+COPY shared/python ./shared/python
+COPY services/${SERVICE} ./services/${SERVICE}
+
+# Xavfsizlik: root bo'lmagan foydalanuvchi
+RUN useradd --no-create-home --uid 1000 appuser
+USER appuser
+
+# Port
+ARG PORT=8000
+ENV PORT=${PORT}
+EXPOSE ${PORT}
+
+# Sog'liq tekshiruvi
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Ishga tushirish
+CMD ["sh", "-c", \
+     "uvicorn services.${SERVICE}.src.main:app \
+      --host 0.0.0.0 \
+      --port ${PORT} \
+      --workers 2 \
+      --loop uvloop \
+      --access-log"]

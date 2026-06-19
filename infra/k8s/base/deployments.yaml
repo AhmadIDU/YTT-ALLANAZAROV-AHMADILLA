@@ -1,0 +1,341 @@
+# ============================================================
+# PossKassa — Kubernetes Deployment manifestlari
+# ============================================================
+
+# ─── Umumiy muhit o'zgaruvchilari referensi ─────────────
+x-common-env: &common-env
+  envFrom:
+    - configMapRef:
+        name: posskassa-config
+    - secretRef:
+        name: posskassa-secrets
+
+# ─── API Gateway ────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: posskassa
+  labels:
+    app: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: posskassa/gateway:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: posskassa-config
+            - secretRef:
+                name: posskassa-secrets
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "256Mi"
+            limits:
+              cpu:    "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+# ─── Sotuv xizmati ──────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sales
+  namespace: posskassa
+  labels:
+    app: sales
+spec:
+  replicas: 3        # Eng ko'p yuklanuvchi xizmat
+  selector:
+    matchLabels:
+      app: sales
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: sales
+    spec:
+      containers:
+        - name: sales
+          image: posskassa/sales:latest
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - configMapRef:
+                name: posskassa-config
+            - secretRef:
+                name: posskassa-secrets
+          resources:
+            requests:
+              cpu:    "200m"
+              memory: "256Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+# ─── Tovar xizmati ──────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory
+  namespace: posskassa
+  labels:
+    app: inventory
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      containers:
+        - name: inventory
+          image: posskassa/inventory:latest
+          ports:
+            - containerPort: 8002
+          envFrom:
+            - configMapRef:
+                name: posskassa-config
+            - secretRef:
+                name: posskassa-secrets
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "256Mi"
+            limits:
+              cpu:    "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+# ─── Muvofiqlik xizmati ─────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compliance
+  namespace: posskassa
+  labels:
+    app: compliance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: compliance
+  template:
+    metadata:
+      labels:
+        app: compliance
+    spec:
+      containers:
+        - name: compliance
+          image: posskassa/compliance:latest
+          ports:
+            - containerPort: 8003
+          envFrom:
+            - configMapRef:
+                name: posskassa-config
+            - secretRef:
+                name: posskassa-secrets
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "256Mi"
+            limits:
+              cpu:    "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+# ─── Kirim xizmati ──────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intake
+  namespace: posskassa
+  labels:
+    app: intake
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: intake
+  template:
+    metadata:
+      labels:
+        app: intake
+    spec:
+      containers:
+        - name: intake
+          image: posskassa/intake:latest
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef:
+                name: posskassa-config
+            - secretRef:
+                name: posskassa-secrets
+          resources:
+            requests:
+              cpu:    "200m"
+              memory: "512Mi"   # LLM so'rovlari uchun ko'proq
+            limits:
+              cpu:    "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+# ─── Tahlil xizmati ─────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics
+  namespace: posskassa
+  labels:
+    app: analytics
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: analytics
+  template:
+    metadata:
+      labels:
+        app: analytics
+    spec:
+      containers:
+        - name: analytics
+          image: posskassa/analytics:latest
+          ports:
+            - containerPort: 8005
+          envFrom:
+            - configMapRef:
+                name: posskassa-config
+            - secretRef:
+                name: posskassa-secrets
+          resources:
+            requests:
+              cpu:    "200m"
+              memory: "512Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8005
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+# ─── Kassa terminali ────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pos-terminal
+  namespace: posskassa
+  labels:
+    app: pos-terminal
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pos-terminal
+  template:
+    metadata:
+      labels:
+        app: pos-terminal
+    spec:
+      containers:
+        - name: pos-terminal
+          image: posskassa/pos-terminal:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu:    "50m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "128Mi"
+---
+# ─── Backoffice ─────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backoffice
+  namespace: posskassa
+  labels:
+    app: backoffice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backoffice
+  template:
+    metadata:
+      labels:
+        app: backoffice
+    spec:
+      containers:
+        - name: backoffice
+          image: posskassa/backoffice:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu:    "50m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "128Mi"
