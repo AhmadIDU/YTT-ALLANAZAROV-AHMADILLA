@@ -580,10 +580,23 @@ if __name__ == "__main__":
     os.makedirs(STATIC, exist_ok=True)
     init_db()
 
-    with socketserver.TCPServer(("", PORT), Handler) as srv:
-        srv.allow_reuse_address = True
-        print(f"  UI:  http://localhost:{PORT}/")
-        print(f"  API: http://localhost:{PORT}/api/v1/")
+    # Port band bo'lsa, avtomatik keyingi bo'sh portni topish
+    actual_port = PORT
+    for try_port in range(PORT, PORT + 20):
+        try:
+            socketserver.TCPServer.allow_reuse_address = True
+            test_srv = socketserver.TCPServer(("", try_port), Handler)
+            actual_port = try_port
+            break
+        except OSError:
+            print(f"  ⚠️  Port {try_port} band, {try_port+1} sinab ko'rilmoqda...")
+            continue
+    else:
+        print("❌ Hech qanday port bo'sh emas!"); sys.exit(1)
+
+    with test_srv as srv:
+        print(f"  UI:  http://localhost:{actual_port}/")
+        print(f"  API: http://localhost:{actual_port}/api/v1/")
         print(f"  Foydalanish endpointlari:")
         print(f"    GET  /api/v1/products")
         print(f"    POST /api/v1/products")
