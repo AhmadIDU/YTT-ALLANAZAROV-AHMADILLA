@@ -95,6 +95,29 @@ input:focus,select:focus{border-color:#2563eb}
 .drop-zone .icon{font-size:36px;margin-bottom:8px}
 .review-row{display:grid;grid-template-columns:auto 1fr 80px 90px 100px 70px;gap:8px;align-items:center;padding:8px;border-bottom:1px solid #f1f5f9;font-size:12px}
 .review-row.hdr{font-weight:600;color:#64748b;font-size:11px;text-transform:uppercase;background:#f8fafc;border-radius:8px 8px 0 0}
+
+/* Nasiya */
+.debt-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:16px;cursor:pointer;transition:.15s}
+.debt-card:hover{border-color:#f59e0b;box-shadow:0 2px 8px rgba(245,158,11,.15)}
+.debt-card.danger{border-left:4px solid #dc2626}
+.debt-card.warning{border-left:4px solid #f59e0b}
+.debt-card.ok{border-left:4px solid #16a34a}
+.debt-amount{font-size:22px;font-weight:800;color:#dc2626}
+.debt-amount.paid{color:#16a34a}
+.progress-bar{height:8px;background:#fee2e2;border-radius:4px;overflow:hidden;margin:6px 0}
+.progress-fill{height:100%;background:#16a34a;border-radius:4px;transition:.3s}
+
+/* Chek */
+@media print{
+  body > *{display:none!important}
+  #print-receipt{display:block!important;position:fixed;top:0;left:0;width:100%}
+}
+#print-receipt{display:none}
+.receipt-paper{font-family:'Courier New',monospace;font-size:13px;max-width:300px;margin:0 auto;padding:16px;background:#fff;color:#000}
+.receipt-paper .r-title{text-align:center;font-weight:bold;font-size:15px;margin-bottom:4px}
+.receipt-paper .r-divider{border-top:1px dashed #000;margin:8px 0}
+.receipt-paper .r-row{display:flex;justify-content:space-between;margin:2px 0}
+.receipt-paper .r-total{font-weight:bold;font-size:15px}
 </style>
 </head>
 <body>
@@ -106,6 +129,7 @@ input:focus,select:focus{border-color:#2563eb}
    <button class="nav-btn active" onclick="show('dashboard')">📊 Dashboard</button>
    <button class="nav-btn" onclick="show('pos')">🛒 Kassa (POS)</button>
    <button class="nav-btn" onclick="show('products')">📦 Mahsulotlar</button>
+   <button class="nav-btn" onclick="show('debtors')">💳 Qarzdorlar</button>
    <button class="nav-btn" onclick="show('intake')">🚛 Tovar qabuli</button>
    <button class="nav-btn" onclick="show('reports')">📈 Hisobotlar</button>
    <button class="nav-btn" onclick="show('sales')">🧾 Sotuvlar</button>
@@ -124,6 +148,7 @@ input:focus,select:focus{border-color:#2563eb}
  </div>
 </div>
 <div class="toast" id="toast"></div>
+<div id="print-receipt"></div>
 <script>
 const API = `http://localhost:${location.port||3500}/api/v1`;
 const fmt = n => new Intl.NumberFormat('uz-UZ').format(Math.round(n)) + " so'm";
@@ -148,14 +173,15 @@ function toast(msg, type='ok') {
 
 function show(page) {
   document.querySelectorAll('.nav-btn').forEach((b,i) => {
-    const pages = ['dashboard','pos','products','intake','reports','sales'];
+    const pages = ['dashboard','pos','products','debtors','intake','reports','sales'];
     b.classList.toggle('active', pages[i] === page);
   });
   const titles = {dashboard:'📊 Dashboard', pos:'🛒 Kassa Terminali',
-    products:'📦 Mahsulotlar', intake:'🚛 Tovar Qabuli (Kirim)',
+    products:'📦 Mahsulotlar', debtors:'💳 Qarzdorlar va Nasiya',
+    intake:'🚛 Tovar Qabuli (Kirim)',
     reports:'📈 Hisobotlar', sales:'🧾 Sotuvlar'};
-  document.getElementById('page-title').textContent = titles[page];
-  ({dashboard, pos, products, intake, reports, sales})[page]();
+  document.getElementById('page-title').textContent = titles[page] || page;
+  ({dashboard, pos, products, debtors, intake, reports, sales})[page]();
 }
 
 // ═══════════════════ DASHBOARD ═══════════════════
@@ -326,6 +352,7 @@ function openPayment() {
       </div>
       <div class="modal-footer">
         <button class="btn btn-gray" onclick="document.getElementById('pay-modal').remove()">Bekor</button>
+        <button class="btn btn-orange" style="background:#f59e0b;color:#fff" onclick="openNasiyaFromPos(${total})">💳 Nasiya</button>
         <button class="btn btn-green" onclick="completeSale(${total})">✅ To'landi</button>
       </div>
     </div>
@@ -361,6 +388,8 @@ async function completeSale(total) {
   document.getElementById('pay-modal')?.remove();
   cart=[]; renderCart();
   toast(`✅ Sotuv amalga oshirildi! Chek: ${sale.receipt_number}`);
+  // Chek chop etish
+  printSaleReceipt(sale);
 }
 // ═══════════════════ MAHSULOTLAR ═══════════════════
 async function products() {
@@ -726,6 +755,491 @@ async function sales() {
 
 // ═══════════════════ ISHGA TUSHIRISH ═══════════════════
 show('dashboard');
+
+// ═══════════════════════════════════════════════════════
+// 💳 QARZDORLAR SAHIFASI
+// ═══════════════════════════════════════════════════════
+async function debtors() {
+  const el = document.getElementById('main-content');
+  const [dlist, stats] = await Promise.all([
+    api('GET','/debtors'),
+    api('GET','/debt-stats')
+  ]);
+
+  const cards = (dlist||[]).map(d => {
+    const cls = d.total_debt > 200000 ? 'danger' : d.total_debt > 50000 ? 'warning' : 'ok';
+    return `
+    <div class="debt-card ${cls}" onclick="debtorDetail('${d.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:14px">${d.full_name}</div>
+          <div style="font-size:12px;color:#64748b;margin-top:2px">📞 ${d.phone||'—'} &nbsp;|&nbsp; ${d.address||'—'}</div>
+        </div>
+        <span class="badge ${d.total_debt>0?'badge-red':'badge-green'}">${d.debt_count||0} ta qarz</span>
+      </div>
+      <div class="debt-amount ${d.total_debt<=0?'paid':''}">${fmt(d.total_debt)}</div>
+      ${d.notes?`<div style="font-size:11px;color:#94a3b8;margin-top:4px">📝 ${d.notes}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-blue" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();addDebtModal('${d.id}','${d.full_name}')">+ Qarz</button>
+        <button class="btn btn-green" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();debtorDetail('${d.id}')">Ko'rish</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+  <!-- Statistika -->
+  <div class="grid-4" style="margin-bottom:20px">
+    <div class="card"><h3>Jami qarzdorlar</h3><div class="val">${stats.total_debtors||0}</div><div class="sub">nafar</div></div>
+    <div class="card"><h3>Umumiy qarz</h3><div class="val" style="color:#dc2626">${fmt(stats.total_debt_amount||0)}</div></div>
+    <div class="card"><h3>Faol qarzlar</h3><div class="val" style="color:#f59e0b">${stats.active_debts||0}</div><div class="sub">ta</div></div>
+    <div class="card"><h3>Yig'ilgan pul</h3><div class="val" style="color:#16a34a">${fmt(stats.total_collected||0)}</div></div>
+  </div>
+
+  <!-- Amallar -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div class="search-box" style="max-width:320px;flex:1">
+      <span class="search-icon">🔍</span>
+      <input placeholder="Ism yoki telefon..." oninput="filterDebtors(this.value)" id="debtor-search">
+    </div>
+    <button class="btn btn-blue" onclick="addDebtorModal()">➕ Yangi qarzdor</button>
+  </div>
+
+  <!-- Kartalar -->
+  <div id="debtors-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+    ${cards||'<div style="color:#94a3b8;text-align:center;padding:40px;grid-column:1/-1">Qarzdorlar yo\'q</div>'}
+  </div>`;
+
+  window._debtorsList = dlist;
+}
+
+function filterDebtors(q) {
+  const filtered = q ? (window._debtorsList||[]).filter(d =>
+    d.full_name.toLowerCase().includes(q.toLowerCase()) ||
+    (d.phone||'').includes(q)
+  ) : window._debtorsList||[];
+
+  document.getElementById('debtors-grid').innerHTML = filtered.map(d => {
+    const cls = d.total_debt > 200000 ? 'danger' : d.total_debt > 50000 ? 'warning' : 'ok';
+    return `<div class="debt-card ${cls}" onclick="debtorDetail('${d.id}')">
+      <div style="font-weight:700">${d.full_name}</div>
+      <div style="font-size:12px;color:#64748b">📞 ${d.phone||'—'}</div>
+      <div class="debt-amount ${d.total_debt<=0?'paid':''}" style="margin-top:8px">${fmt(d.total_debt)}</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-blue" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();addDebtModal('${d.id}','${d.full_name}')">+ Qarz</button>
+        <button class="btn btn-green" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();debtorDetail('${d.id}')">Ko'rish</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Qarzdor tafsiloti modali
+async function debtorDetail(did) {
+  const d = await api('GET', `/debtors/${did}`);
+  const debts = d.debts || [];
+  const payments = d.payments || [];
+
+  const debtRows = debts.map(debt => {
+    const pct = debt.amount > 0 ? Math.round(debt.paid_amount / debt.amount * 100) : 0;
+    return `
+    <div style="background:#f8fafc;border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid ${debt.status==='paid'?'#bbf7d0':'#fde68a'}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <div>
+          <span style="font-weight:600">${debt.description||'Nasiya'}</span>
+          <span class="badge ${debt.status==='paid'?'badge-green':'badge-yellow'}" style="margin-left:8px;font-size:10px">${debt.status==='paid'?'✅ Yopildi':'⏳ Faol'}</span>
+        </div>
+        <span style="font-weight:700;color:#dc2626">${fmt(debt.remaining)}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b">
+        <span>Jami: ${fmt(debt.amount)}</span>
+        <span>To'langan: ${fmt(debt.paid_amount)} (${pct}%)</span>
+        ${debt.due_date?`<span>📅 ${debt.due_date}</span>`:''}
+      </div>
+      ${debt.status==='active'?`
+      <button class="btn btn-green" style="margin-top:8px;padding:5px 14px;font-size:12px;width:100%"
+        onclick="payDebtModal('${debt.id}','${d.full_name}',${debt.remaining})">
+        💵 To'lash
+      </button>`:''}
+    </div>`;
+  }).join('');
+
+  const payHistory = payments.slice(0,5).map(p =>
+    `<div class="tbl" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f1f5f9;font-size:12px">
+      <span style="color:#64748b">${(p.paid_at||'').slice(0,10)}</span>
+      <span>${p.note||'To\'lov'}</span>
+      <span style="font-weight:600;color:#16a34a">+${fmt(p.amount)}</span>
+    </div>`
+  ).join('');
+
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-bg" id="debtor-detail-modal">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <div>
+          <h3>👤 ${d.full_name}</h3>
+          <div style="font-size:12px;color:#64748b;margin-top:2px">📞 ${d.phone||'—'} | ${d.address||'—'}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:20px;font-weight:800;color:#dc2626">${fmt(d.total_debt)}</span>
+          <button class="btn btn-gray" onclick="document.getElementById('debtor-detail-modal').remove()">✕</button>
+        </div>
+      </div>
+      <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-blue" style="flex:1" onclick="document.getElementById('debtor-detail-modal').remove();addDebtModal('${d.id}','${d.full_name}')">+ Yangi qarz</button>
+          <button class="btn btn-green" style="flex:1" onclick="printDebtorCard('${d.id}')">🖨️ Chek</button>
+        </div>
+
+        <h4 style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:8px">
+          Qarzlar (${debts.length} ta)
+        </h4>
+        ${debtRows || '<p style="color:#94a3b8;text-align:center;padding:16px">Qarz yo\'q</p>'}
+
+        ${payments.length ? `
+        <h4 style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;margin:12px 0 8px">
+          Oxirgi to'lovlar
+        </h4>
+        ${payHistory}` : ''}
+      </div>
+    </div>
+  </div>`);
+  window._currentDebtor = d;
+}
+
+// Yangi qarzdor qo'shish modali
+function addDebtorModal() {
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-bg" id="add-debtor-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>➕ Yangi qarzdor</h3><button class="btn btn-gray" onclick="document.getElementById('add-debtor-modal').remove()">✕</button></div>
+      <div class="modal-body">
+        <div class="form-row"><div><label>Ism familiya *</label><input id="nd-name" placeholder="Karimov Botir" autofocus></div></div>
+        <div class="form-row cols-2">
+          <div><label>Telefon</label><input id="nd-phone" placeholder="+998901234567"></div>
+          <div><label>Manzil</label><input id="nd-address" placeholder="Chilonzor 5"></div>
+        </div>
+        <div class="form-row"><div><label>Izoh</label><input id="nd-notes" placeholder="Doimiy mijoz..."></div></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('add-debtor-modal').remove()">Bekor</button>
+        <button class="btn btn-blue" onclick="saveDebtor()">💾 Saqlash</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+async function saveDebtor() {
+  const name = document.getElementById('nd-name').value.trim();
+  if (!name) { toast('Ism kiritilishi shart!','err'); return; }
+  const res = await api('POST','/debtors',{
+    full_name: name,
+    phone:    document.getElementById('nd-phone').value,
+    address:  document.getElementById('nd-address').value,
+    notes:    document.getElementById('nd-notes').value,
+  });
+  document.getElementById('add-debtor-modal')?.remove();
+  toast(`✅ ${res.full_name} qo'shildi!`);
+  debtors();
+}
+
+// Qarz qo'shish modali
+function addDebtModal(did, name) {
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-bg" id="add-debt-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>💳 Nasiya qo'shish — ${name}</h3><button class="btn btn-gray" onclick="document.getElementById('add-debt-modal').remove()">✕</button></div>
+      <div class="modal-body">
+        <div class="form-row cols-2">
+          <div><label>Qarz miqdori (so'm) *</label><input id="debt-amount" type="number" min="0" placeholder="50000" autofocus></div>
+          <div><label>Avans to'lov (so'm)</label><input id="debt-paid" type="number" min="0" placeholder="0"></div>
+        </div>
+        <div class="form-row"><div><label>Tavsif</label><input id="debt-desc" placeholder="Oziq-ovqat xaridi..."></div></div>
+        <div class="form-row"><div><label>Muddat (ixtiyoriy)</label><input id="debt-due" type="date"></div></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('add-debt-modal').remove()">Bekor</button>
+        <button class="btn btn-blue" onclick="saveDebt('${did}')">💾 Saqlash</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+async function saveDebt(did) {
+  const amount = parseFloat(document.getElementById('debt-amount').value);
+  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!','err'); return; }
+  const res = await api('POST','/debts',{
+    debtor_id: did,
+    amount,
+    paid_amount: parseFloat(document.getElementById('debt-paid').value)||0,
+    description: document.getElementById('debt-desc').value || 'Nasiya',
+    due_date: document.getElementById('debt-due').value || null,
+  });
+  document.getElementById('add-debt-modal')?.remove();
+  toast(`✅ ${fmt(res.remaining)} qarz qo'shildi!`);
+  debtors();
+}
+
+// Qarzni to'lash modali
+function payDebtModal(debtId, name, remaining) {
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-bg" id="pay-debt-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>💵 To'lov — ${name}</h3><button class="btn btn-gray" onclick="document.getElementById('pay-debt-modal').remove()">✕</button></div>
+      <div class="modal-body">
+        <div style="background:#fef9c3;border-radius:10px;padding:12px;text-align:center;margin-bottom:16px">
+          <div style="font-size:12px;color:#a16207">Qoldiq qarz</div>
+          <div style="font-size:28px;font-weight:800;color:#dc2626">${fmt(remaining)}</div>
+        </div>
+        <div class="form-row cols-2">
+          <div><label>To'lov miqdori *</label><input id="pay-amount" type="number" min="1" max="${remaining}" value="${remaining}" autofocus></div>
+          <div><label>To'lov usuli</label>
+            <select id="pay-method">
+              <option value="cash">💵 Naqd</option>
+              <option value="uzcard">💳 Uzcard</option>
+              <option value="humo">💳 Humo</option>
+              <option value="payme">📱 Payme</option>
+              <option value="click">📱 Click</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row"><div><label>Izoh</label><input id="pay-note" placeholder="Naqd to'ladi..."></div></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('pay-debt-modal').remove()">Bekor</button>
+        <button class="btn btn-green" onclick="processPayment('${debtId}')">✅ To'lash</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+async function processPayment(debtId) {
+  const amount = parseFloat(document.getElementById('pay-amount').value);
+  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!', 'err'); return; }
+  const res = await api('POST', `/debts/${debtId}/pay`, {
+    amount,
+    payment_method: document.getElementById('pay-method').value,
+    note: document.getElementById('pay-note').value,
+  });
+  document.getElementById('pay-debt-modal')?.remove();
+  document.getElementById('debtor-detail-modal')?.remove();
+  toast(res.message || '✅ To\'lov qabul qilindi!');
+
+  // Nasiya chekini chop etish
+  printDebtPayReceipt(res);
+  debtors();
+}
+
+// ═══════════════════════════════════════════════════════
+// 🖨️ CHK CHOP ETISH
+// ═══════════════════════════════════════════════════════
+
+// Sotuv cheki
+function printSaleReceipt(sale) {
+  const items = (sale.items||[]).map(i =>
+    `<div class="r-row"><span>${i.product_name} ×${i.quantity}</span><span>${fmt(i.total_price)}</span></div>`
+  ).join('');
+  const pays = (sale.payments||[]).map(p => {
+    const m = {cash:'Naqd',uzcard:'Uzcard',humo:'Humo',payme:'Payme',click:'Click',uzum:'Uzum'};
+    return `<div class="r-row"><span>${m[p.method]||p.method}:</span><span>${fmt(p.amount)}</span></div>`;
+  }).join('') || `<div class="r-row"><span>Naqd:</span><span>${fmt(sale.total_amount)}</span></div>`;
+
+  const html = `
+  <div class="receipt-paper">
+    <div class="r-title">PossKassa</div>
+    <div style="text-align:center;font-size:11px">Demo Do'kon</div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Chek:</span><span>${sale.receipt_number||''}</span></div>
+    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
+    <div class="r-divider"></div>
+    ${items}
+    <div class="r-divider"></div>
+    <div class="r-row r-total"><span>JAMI:</span><span>${fmt(sale.total_amount)}</span></div>
+    <div class="r-divider"></div>
+    ${pays}
+    <div class="r-divider"></div>
+    ${sale.fiscal_url?`<div style="text-align:center;font-size:10px">OFD: ${sale.fiscal_url}</div><div class="r-divider"></div>`:''}
+    <div style="text-align:center;margin-top:8px">Xaridingiz uchun rahmat! 🙏</div>
+  </div>`;
+  showPrintModal(html, 'Sotuv Cheki');
+}
+
+// Nasiya to'lov cheki
+function printDebtPayReceipt(res) {
+  const debt = res.debt || {};
+  const debtor = res.debtor || {};
+  const html = `
+  <div class="receipt-paper">
+    <div class="r-title">PossKassa — Nasiya</div>
+    <div style="text-align:center;font-size:11px">To'lov Kvitansiyasi</div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Chek:</span><span>${res.receipt_number||''}</span></div>
+    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Qarzdor:</span><span><b>${debtor.full_name||''}</b></span></div>
+    <div class="r-row"><span>Tel:</span><span>${debtor.phone||'—'}</span></div>
+    <div class="r-divider"></div>
+    <div class="r-row r-total"><span>TO'LANDI:</span><span style="color:#16a34a">+${fmt(res.paid)}</span></div>
+    <div class="r-row"><span>Qoldiq qarz:</span><span style="color:#dc2626">${fmt(debt.remaining||0)}</span></div>
+    <div class="r-divider"></div>
+    <div style="text-align:center;font-size:11px">${res.message||''}</div>
+    <div style="text-align:center;margin-top:8px">Rahmat! 🙏</div>
+  </div>`;
+  showPrintModal(html, 'Nasiya To\'lov Cheki');
+}
+
+// Qarzdor kartasi (barcha qarzlar)
+async function printDebtorCard(did) {
+  const d = await api('GET', `/debtors/${did}`);
+  const rows = (d.debts||[]).map(debt =>
+    `<div class="r-row"><span>${debt.description||'Nasiya'}</span><span style="color:#dc2626">${fmt(debt.remaining)}</span></div>`
+  ).join('');
+  const html = `
+  <div class="receipt-paper">
+    <div class="r-title">PossKassa — Nasiya Hisobi</div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Mijoz:</span><span><b>${d.full_name}</b></span></div>
+    <div class="r-row"><span>Tel:</span><span>${d.phone||'—'}</span></div>
+    <div class="r-row"><span>Manzil:</span><span>${d.address||'—'}</span></div>
+    <div class="r-divider"></div>
+    ${rows || '<div style="text-align:center">Qarz yo\'q</div>'}
+    <div class="r-divider"></div>
+    <div class="r-row r-total"><span>JAMI QARZ:</span><span style="color:#dc2626">${fmt(d.total_debt)}</span></div>
+    <div class="r-divider"></div>
+    <div style="text-align:center;font-size:11px">Sana: ${new Date().toLocaleDateString('uz-UZ')}</div>
+  </div>`;
+  document.getElementById('debtor-detail-modal')?.remove();
+  showPrintModal(html, `${d.full_name} — Nasiya Hisobi`);
+}
+
+// Chekni ekranda ko'rsatish va chop etish
+function showPrintModal(html, title) {
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-bg" id="receipt-modal">
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <h3>🖨️ ${title}</h3>
+        <button class="btn btn-gray" onclick="document.getElementById('receipt-modal').remove()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:12px">${html}</div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('receipt-modal').remove()">Yopish</button>
+        <button class="btn btn-blue" onclick="doPrint('${title}')">🖨️ Chop etish</button>
+      </div>
+    </div>
+  </div>`);
+  window._printHtml = html;
+}
+
+function doPrint(title) {
+  const w = window.open('','_blank','width=400,height=600');
+  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+  <style>
+    body{font-family:'Courier New',monospace;font-size:13px;max-width:300px;margin:20px auto;color:#000}
+    .r-row{display:flex;justify-content:space-between;margin:3px 0}
+    .r-title{text-align:center;font-weight:bold;font-size:15px;margin-bottom:4px}
+    .r-divider{border-top:1px dashed #000;margin:8px 0}
+    .r-total{font-weight:bold;font-size:15px}
+  </style></head><body>${window._printHtml}</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+  w.close();
+}
+
+// ── POS da nasiya to'lov usuli ─────────────────────────
+async function openNasiyaFromPos(total) {
+  document.getElementById('pay-modal')?.remove();
+  const dlist = await api('GET','/debtors');
+  const opts = (dlist||[]).map(d =>
+    `<option value="${d.id}">${d.full_name} (${d.phone||'—'}) — qarz: ${fmt(d.total_debt)}</option>`
+  ).join('');
+
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-bg" id="nasiya-pos-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>💳 Nasiyaga berish — ${fmt(total)}</h3><button class="btn btn-gray" onclick="document.getElementById('nasiya-pos-modal').remove()">✕</button></div>
+      <div class="modal-body">
+        <div style="background:#fef9c3;border-radius:10px;padding:12px;text-align:center;margin-bottom:16px">
+          <div style="font-size:12px;color:#a16207">Nasiya miqdori</div>
+          <div style="font-size:28px;font-weight:800;color:#f59e0b">${fmt(total)}</div>
+        </div>
+        <div class="form-row">
+          <div><label>Qarzdorni tanlang</label>
+            <select id="nasiya-debtor" style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:13px">
+              <option value="">— Tanlang —</option>
+              ${opts}
+              <option value="__new__">➕ Yangi qarzdor yaratish</option>
+            </select>
+          </div>
+        </div>
+        <div id="new-debtor-fields" style="display:none">
+          <div class="form-row cols-2">
+            <div><label>Ism *</label><input id="ni-name" placeholder="Ism familiya"></div>
+            <div><label>Telefon</label><input id="ni-phone" placeholder="+998901234567"></div>
+          </div>
+        </div>
+        <div class="form-row"><div><label>Izoh</label><input id="nasiya-note" placeholder="Sotuv uchun nasiya"></div></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('nasiya-pos-modal').remove()">Bekor</button>
+        <button class="btn" style="background:#f59e0b;color:#fff;padding:8px 20px;font-size:14px;border-radius:8px;cursor:pointer;border:none" onclick="saveNasiyaFromPos(${total})">💳 Nasiyaga yozish</button>
+      </div>
+    </div>
+  </div>`);
+
+  document.getElementById('nasiya-debtor').addEventListener('change', e => {
+    document.getElementById('new-debtor-fields').style.display =
+      e.target.value === '__new__' ? 'block' : 'none';
+  });
+}
+
+async function saveNasiyaFromPos(total) {
+  let debtorId = document.getElementById('nasiya-debtor').value;
+  if (!debtorId) { toast('Qarzdorni tanlang!','err'); return; }
+
+  // Yangi qarzdor yaratish
+  if (debtorId === '__new__') {
+    const name = document.getElementById('ni-name').value.trim();
+    if (!name) { toast('Ism kiritilishi shart!','err'); return; }
+    const nd = await api('POST','/debtors',{
+      full_name: name,
+      phone: document.getElementById('ni-phone').value,
+    });
+    debtorId = nd.id;
+  }
+
+  // Sotuvni yaratish (nasiya sifatida)
+  const saleItems = cart.map(c=>({
+    product_id: c.product.id, product_name: c.product.name,
+    quantity: c.quantity, unit_price: c.product.price, total_price: c.product.price*c.quantity
+  }));
+  const sale = await api('POST','/sales',{
+    total_amount: total, payment_method: 'nasiya',
+    payments: [{method:'nasiya', amount: total}],
+    items: saleItems
+  });
+
+  // Qarz yozish
+  const debt = await api('POST','/debts',{
+    debtor_id: debtorId,
+    sale_id: sale.id,
+    amount: total,
+    paid_amount: 0,
+    description: document.getElementById('nasiya-note').value || `Sotuv ${sale.receipt_number}`
+  });
+
+  document.getElementById('nasiya-pos-modal')?.remove();
+  cart = []; renderCart();
+  toast(`✅ Nasiyaga yozildi! Qarz: ${fmt(total)}`);
+
+  // Nasiya cheki
+  const debtor = await api('GET', `/debtors/${debtorId}`);
+  printDebtPayReceipt({
+    receipt_number: sale.receipt_number,
+    paid: 0, debt: debt, debtor: debtor,
+    message: `Nasiya: ${fmt(total)}`
+  });
+}
 </script>
 </body>
 </html>

@@ -51,6 +51,42 @@ def init_db():
         status TEXT DEFAULT 'review_pending',
         rows_json TEXT, created_at TEXT
     );
+
+    -- ── NASIYA / QARZ MODULI ─────────────────────────────
+    CREATE TABLE IF NOT EXISTS debtors (
+        id TEXT PRIMARY KEY,
+        full_name TEXT NOT NULL,
+        phone TEXT,
+        address TEXT,
+        total_debt REAL DEFAULT 0,
+        created_at TEXT,
+        notes TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS debts (
+        id TEXT PRIMARY KEY,
+        debtor_id TEXT NOT NULL,
+        sale_id TEXT,
+        amount REAL NOT NULL,
+        paid_amount REAL DEFAULT 0,
+        remaining REAL NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'active',
+        due_date TEXT,
+        created_at TEXT,
+        FOREIGN KEY(debtor_id) REFERENCES debtors(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS debt_payments (
+        id TEXT PRIMARY KEY,
+        debt_id TEXT NOT NULL,
+        debtor_id TEXT NOT NULL,
+        amount REAL NOT NULL,
+        payment_method TEXT DEFAULT 'cash',
+        note TEXT,
+        paid_at TEXT,
+        FOREIGN KEY(debt_id) REFERENCES debts(id)
+    );
     """)
 
     # Demo mahsulotlar — faqat bo'sh bo'lsa qo'shiladi
@@ -89,6 +125,31 @@ def init_db():
             sid = str(uuid.uuid4())
             c.execute("INSERT INTO sales VALUES (?,?,?,?,?,?,?)",
                       (sid, _receipt(), "Demo Kassir", total, method, "synced", now))
+
+    # Demo qarzdorlar — faqat bo'sh bo'lsa
+    if c.execute("SELECT COUNT(*) FROM debtors").fetchone()[0] == 0:
+        now = _now()
+        d1 = str(uuid.uuid4())
+        d2 = str(uuid.uuid4())
+        d3 = str(uuid.uuid4())
+        d4 = str(uuid.uuid4())
+        for did, name, phone, addr, debt, note in [
+            (d1, "Karimov Botir",    "+998901234567", "Chilonzor 5",      150000, "Doimiy mijoz"),
+            (d2, "Rahimova Malika",  "+998912345678", "Yunusobod 12",      85000, ""),
+            (d3, "Toshmatov Sardor", "+998923456789", "Mirzo Ulugbek 3",  320000, "Oylik to'laydi"),
+            (d4, "Usmonov Jasur",    "+998934567890", "Shayxontohur 7",        0, ""),
+        ]:
+            c.execute("INSERT INTO debtors VALUES (?,?,?,?,?,?,?)",
+                      (did, name, phone, addr, debt, now, note))
+        # Demo qarzlar
+        for did, total, paid, desc in [
+            (d1, 150000,      0, "Oziq-ovqat mahsulotlari"),
+            (d2,  85000,      0, "Kunlik xarid"),
+            (d3, 500000, 180000, "Oylik zakaz"),
+        ]:
+            c.execute("INSERT INTO debts VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), did, None, total, paid, total-paid,
+                 desc, "active", None, now))
 
     conn.commit()
     conn.close()
@@ -489,6 +550,188 @@ def handle_api(method, path, body, params):
             {"id":"a-2","user_name":"Demo Menejer","entity_type":"product","action":"updated",
              "after_state":{"price":"15000"},"created_at":_now()},
         ])
+
+    # ══════════════════════════════════════════════════════════
+    # ── NASIYA / QARZ MODULI ──────────────────────────────────
+    # ══════════════════════════════════════════════════════════
+    if res == "debtors":
+        conn = _db()
+
+        # GET /api/v1/debtors — ro'yxat
+        if method == "GET" and len(parts) == 3:
+            q = params.get("q","")
+            if q:
+                rows = _rows(conn.execute(
+                    "SELECT * FROM debtors WHERE name LIKE ? OR phone LIKE ? ORDER BY total_debt DESC",
+                    (f"%{q}%", f"%{q}%")
+                ))
+            else:
+                rows = _rows(conn.execute(
+                    "SELECT * FROM debtors ORDER BY total_debt DESC"
+                ))
+            # Har bir qarzdor uchun qarzlar sonini qo'shamiz
+            for r in rows:
+                r["debt_count"] = conn.execute(
+                    "SELECT COUNT(*) FROM debts WHERE debtor_id=? AND status='active'",
+                    (r["id"],)
+                ).fetchone()[0]
+            conn.close()
+            return _ok(rows)
+
+        # POST /api/v1/debtors — yangi qarzdor
+        if method == "POST" and len(parts) == 3:
+            did = str(uuid.uuid4())
+            conn.execute(
+                "INSERT INTO debtors VALUES (?,?,?,?,?,?,?)",
+                (did, body.get("full_name",""), body.get("phone",""),
+                 body.get("address",""), 0, _now(), body.get("notes",""))
+            )
+            conn.commit()
+            row = dict(conn.execute("SELECT * FROM debtors WHERE id=?",(did,)).fetchone())
+            conn.close()
+            return _ok(row, 201)
+
+        # GET /api/v1/debtors/{id} — tafsilot
+        if method == "GET" and len(parts) == 4:
+            did = parts[3]
+            row = conn.execute("SELECT * FROM debtors WHERE id=?",(did,)).fetchone()
+            if not row: conn.close(); return _err("Topilmadi", 404)
+            data = dict(row)
+            data["debts"] = _rows(conn.execute(
+                "SELECT * FROM debts WHERE debtor_id=? ORDER BY created_at DESC",(did,)
+            ))
+            data["payments"] = _rows(conn.execute(
+                "SELECT * FROM debt_payments WHERE debtor_id=? ORDER BY paid_at DESC LIMIT 20",(did,)
+            ))
+            conn.close()
+            return _ok(data)
+
+        # PUT /api/v1/debtors/{id} — tahrirlash
+        if method == "PUT" and len(parts) == 4:
+            did = parts[3]
+            fields, vals = [], []
+            for f in ("full_name","phone","address","notes"):
+                if f in body:
+                    fields.append(f"{f}=?"); vals.append(body[f])
+            if fields:
+                conn.execute(f"UPDATE debtors SET {','.join(fields)} WHERE id=?",(*vals,did))
+                conn.commit()
+            row = conn.execute("SELECT * FROM debtors WHERE id=?",(did,)).fetchone()
+            conn.close()
+            return _ok(dict(row)) if row else _err("Topilmadi",404)
+
+        # DELETE /api/v1/debtors/{id}
+        if method == "DELETE" and len(parts) == 4:
+            did = parts[3]
+            conn.execute("UPDATE debts SET status='cancelled' WHERE debtor_id=? AND status='active'",(did,))
+            conn.execute("DELETE FROM debtors WHERE id=?",(did,))
+            conn.commit(); conn.close()
+            return _ok({"message":"O'chirildi"})
+
+        conn.close()
+
+    # ── Qarzlar ──────────────────────────────────────────────
+    if res == "debts":
+        conn = _db()
+
+        # POST /api/v1/debts — yangi qarz qo'shish
+        if method == "POST" and len(parts) == 3:
+            debt_id  = str(uuid.uuid4())
+            debtor_id = body.get("debtor_id","")
+            amount   = float(body.get("amount", 0))
+            paid     = float(body.get("paid_amount", 0))
+            conn.execute(
+                "INSERT INTO debts VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (debt_id, debtor_id, body.get("sale_id"), amount, paid,
+                 amount - paid, body.get("description","Nasiya"),
+                 "active", body.get("due_date"), _now())
+            )
+            # Qarzdorning umumiy qarzini yangilash
+            conn.execute(
+                "UPDATE debtors SET total_debt = total_debt + ? WHERE id=?",
+                (amount - paid, debtor_id)
+            )
+            conn.commit()
+            row = dict(conn.execute("SELECT * FROM debts WHERE id=?",(debt_id,)).fetchone())
+            conn.close()
+            return _ok(row, 201)
+
+        # GET /api/v1/debts — barcha faol qarzlar
+        if method == "GET" and len(parts) == 3:
+            status_filter = params.get("status","active")
+            rows = _rows(conn.execute("""
+                SELECT d.*, dr.full_name as debtor_name, dr.phone as debtor_phone
+                FROM debts d
+                JOIN debtors dr ON d.debtor_id = dr.id
+                WHERE d.status = ?
+                ORDER BY d.created_at DESC
+            """, (status_filter,)))
+            conn.close()
+            return _ok(rows)
+
+        # POST /api/v1/debts/{id}/pay — qarzni to'lash
+        if method == "POST" and len(parts) == 5 and parts[4] == "pay":
+            debt_id = parts[3]
+            pay_amount = float(body.get("amount", 0))
+            note   = body.get("note","")
+            pmethod = body.get("payment_method","cash")
+
+            debt = conn.execute("SELECT * FROM debts WHERE id=?",(debt_id,)).fetchone()
+            if not debt: conn.close(); return _err("Qarz topilmadi",404)
+            debt = dict(debt)
+
+            # To'lov miqdori qarzdan oshmasin
+            actual_pay = min(pay_amount, debt["remaining"])
+            new_paid   = debt["paid_amount"] + actual_pay
+            new_remain = debt["remaining"]   - actual_pay
+            new_status = "paid" if new_remain <= 0 else "active"
+
+            conn.execute(
+                "UPDATE debts SET paid_amount=?, remaining=?, status=? WHERE id=?",
+                (new_paid, new_remain, new_status, debt_id)
+            )
+            # To'lov tarixi
+            conn.execute(
+                "INSERT INTO debt_payments VALUES (?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), debt_id, debt["debtor_id"],
+                 actual_pay, pmethod, note, _now())
+            )
+            # Qarzdorning umumiy qarzini kamaytirish
+            conn.execute(
+                "UPDATE debtors SET total_debt = MAX(0, total_debt - ?) WHERE id=?",
+                (actual_pay, debt["debtor_id"])
+            )
+            conn.commit()
+
+            updated = dict(conn.execute("SELECT * FROM debts WHERE id=?",(debt_id,)).fetchone())
+            debtor  = dict(conn.execute("SELECT * FROM debtors WHERE id=?",(debt["debtor_id"],)).fetchone())
+            conn.close()
+
+            receipt_num = _receipt().replace("PK-","NAS-")
+            return _ok({
+                "debt":       updated,
+                "debtor":     debtor,
+                "paid":       actual_pay,
+                "receipt_number": receipt_num,
+                "message":    "Qarz to'liq yopildi ✅" if new_status == "paid" else f"Qoldiq: {int(new_remain):,} so'm"
+            })
+
+        conn.close()
+
+    # ── Statistika ────────────────────────────────────────────
+    if res == "debt-stats":
+        conn = _db()
+        row = conn.execute("""
+            SELECT
+                COUNT(*) as total_debtors,
+                SUM(total_debt) as total_debt_amount,
+                (SELECT COUNT(*) FROM debts WHERE status='active') as active_debts,
+                (SELECT COUNT(*) FROM debts WHERE status='paid') as paid_debts,
+                (SELECT COALESCE(SUM(amount),0) FROM debt_payments) as total_collected
+            FROM debtors WHERE total_debt > 0
+        """).fetchone()
+        conn.close()
+        return _ok(dict(row))
 
     return _err(f"'{path}' topilmadi", 404)
 
