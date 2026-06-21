@@ -87,6 +87,74 @@ def init_db():
         paid_at TEXT,
         FOREIGN KEY(debt_id) REFERENCES debts(id)
     );
+
+    -- ══════════════════════════════════════════════
+    -- FERMALAR MODULI
+    -- ══════════════════════════════════════════════
+    CREATE TABLE IF NOT EXISTS farms (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        owner_name TEXT,
+        phone TEXT,
+        address TEXT,
+        region TEXT,
+        farm_type TEXT DEFAULT 'general',
+        total_debt REAL DEFAULT 0,
+        total_supplied REAL DEFAULT 0,
+        notes TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS farm_debts (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        amount REAL NOT NULL,
+        paid_amount REAL DEFAULT 0,
+        remaining REAL NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'active',
+        due_date TEXT,
+        created_at TEXT,
+        FOREIGN KEY(farm_id) REFERENCES farms(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS farm_payments (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        farm_debt_id TEXT,
+        amount REAL NOT NULL,
+        payment_method TEXT DEFAULT 'cash',
+        note TEXT,
+        paid_at TEXT,
+        FOREIGN KEY(farm_id) REFERENCES farms(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS farm_supplies (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        supply_number TEXT,
+        total_amount REAL DEFAULT 0,
+        payment_type TEXT DEFAULT 'cash',
+        paid_amount REAL DEFAULT 0,
+        debt_amount REAL DEFAULT 0,
+        notes TEXT,
+        supply_date TEXT,
+        created_at TEXT,
+        FOREIGN KEY(farm_id) REFERENCES farms(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS farm_supply_items (
+        id TEXT PRIMARY KEY,
+        supply_id TEXT NOT NULL,
+        farm_id TEXT NOT NULL,
+        product_name TEXT,
+        quantity REAL,
+        unit TEXT DEFAULT 'pcs',
+        unit_price REAL,
+        total_price REAL,
+        FOREIGN KEY(supply_id) REFERENCES farm_supplies(id)
+    );
     """)
 
     # Demo mahsulotlar — faqat bo'sh bo'lsa qo'shiladi
@@ -125,6 +193,43 @@ def init_db():
             sid = str(uuid.uuid4())
             c.execute("INSERT INTO sales VALUES (?,?,?,?,?,?,?)",
                       (sid, _receipt(), "Demo Kassir", total, method, "synced", now))
+
+    # Demo fermalar — faqat bo'sh bo'lsa
+    if c.execute("SELECT COUNT(*) FROM farms").fetchone()[0] == 0:
+        now = _now()
+        f1 = str(uuid.uuid4())
+        f2 = str(uuid.uuid4())
+        f3 = str(uuid.uuid4())
+        for fid, name, owner, phone, address, region, ftype, debt, supplied in [
+            (f1,"Bahor Fermer Xo'jaligi","Toshmatov Behruz","+998901112233","Sirdaryo viloyati","Sirdaryo","don",320000,1850000),
+            (f2,"Yashil Vodiy FX",       "Rahimov Akbar",   "+998912223344","Farg'ona viloyati","Farg'ona","sabzavot",150000,970000),
+            (f3,"Nur Agro FX",           "Karimov Sanjar",  "+998923334455","Toshkent viloyati","Toshkent","chorva",0,540000),
+        ]:
+            c.execute("INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?)",
+                (fid,name,owner,phone,address,region,ftype,debt,supplied,now))
+
+        # Demo qarzlar
+        for fid, amount, paid, desc in [
+            (f1, 500000, 180000, "Urug' va o'g'it"),
+            (f2, 150000, 0,      "Qishloq xo'jaligi jihozlari"),
+        ]:
+            c.execute("INSERT INTO farm_debts VALUES (?,?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), fid, amount, paid, amount-paid, desc, "active", None, now))
+
+        # Demo yetkazmalar
+        for fid, total, ptype, paid, snumber in [
+            (f1, 850000,  "nasiya", 530000, "YT-001"),
+            (f1, 1000000, "naqd",   1000000,"YT-002"),
+            (f2, 970000,  "nasiya", 820000, "YT-003"),
+            (f3, 540000,  "naqd",   540000, "YT-004"),
+        ]:
+            sid = str(uuid.uuid4())
+            debt_a = total - paid
+            c.execute("INSERT INTO farm_supplies VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (sid, fid, snumber, total, ptype, paid, debt_a, "", now, now))
+            # Yetkazma mahsulotlari
+            c.execute("INSERT INTO farm_supply_items VALUES (?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), sid, fid, "Urug' va ko'chatlar", 100, "kg", total/100, total))
 
     # Demo qarzdorlar — faqat bo'sh bo'lsa
     if c.execute("SELECT COUNT(*) FROM debtors").fetchone()[0] == 0:
@@ -670,9 +775,214 @@ def handle_api(method, path, body, params):
 
         conn.close()
 
+    # ══════════════════════════════════════════════════════════
+    # 🏭 FERMALAR MODULI
+    # ══════════════════════════════════════════════════════════
+    if res == "farms":
+        conn = _db()
+
+        # GET /api/v1/farms — ro'yxat
+        if method == "GET" and len(parts) == 3:
+            q = params.get("q","")
+            if q:
+                rows = _rows(conn.execute(
+                    "SELECT * FROM farms WHERE is_active=1 AND (name LIKE ? OR owner_name LIKE ? OR phone LIKE ?)",
+                    (f"%{q}%",f"%{q}%",f"%{q}%")
+                ))
+            else:
+                rows = _rows(conn.execute(
+                    "SELECT * FROM farms WHERE is_active=1 ORDER BY total_debt DESC"
+                ))
+            for r in rows:
+                r["active_debts"] = conn.execute(
+                    "SELECT COUNT(*) FROM farm_debts WHERE farm_id=? AND status='active'",(r["id"],)
+                ).fetchone()[0]
+                r["supply_count"] = conn.execute(
+                    "SELECT COUNT(*) FROM farm_supplies WHERE farm_id=?",(r["id"],)
+                ).fetchone()[0]
+            conn.close(); return _ok(rows)
+
+        # POST /api/v1/farms — yangi ferma
+        if method == "POST" and len(parts) == 3:
+            fid = str(uuid.uuid4())
+            conn.execute(
+                "INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,notes,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,1,?)",
+                (fid, body.get("name",""), body.get("owner_name",""),
+                 body.get("phone",""), body.get("address",""),
+                 body.get("region",""), body.get("farm_type","general"),
+                 0, 0, body.get("notes",""), _now())
+            )
+            conn.commit()
+            row = dict(conn.execute("SELECT * FROM farms WHERE id=?",(fid,)).fetchone())
+            conn.close(); return _ok(row, 201)
+
+        # GET /api/v1/farms/{id} — tafsilot
+        if method == "GET" and len(parts) == 4:
+            fid = parts[3]
+            farm = conn.execute("SELECT * FROM farms WHERE id=?",(fid,)).fetchone()
+            if not farm: conn.close(); return _err("Ferma topilmadi",404)
+            data = dict(farm)
+            data["debts"]    = _rows(conn.execute(
+                "SELECT * FROM farm_debts WHERE farm_id=? ORDER BY created_at DESC",(fid,)))
+            data["supplies"] = _rows(conn.execute(
+                "SELECT * FROM farm_supplies WHERE farm_id=? ORDER BY supply_date DESC LIMIT 10",(fid,)))
+            data["payments"] = _rows(conn.execute(
+                "SELECT * FROM farm_payments WHERE farm_id=? ORDER BY paid_at DESC LIMIT 10",(fid,)))
+            # Yetkazma elementlari
+            for s in data["supplies"]:
+                s["items"] = _rows(conn.execute(
+                    "SELECT * FROM farm_supply_items WHERE supply_id=?",(s["id"],)))
+            conn.close(); return _ok(data)
+
+        # PUT /api/v1/farms/{id} — tahrirlash
+        if method == "PUT" and len(parts) == 4:
+            fid = parts[3]
+            fields, vals = [], []
+            for f in ("name","owner_name","phone","address","region","farm_type","notes"):
+                if f in body: fields.append(f"{f}=?"); vals.append(body[f])
+            if fields:
+                conn.execute(f"UPDATE farms SET {','.join(fields)} WHERE id=?",(*vals,fid))
+                conn.commit()
+            row = conn.execute("SELECT * FROM farms WHERE id=?",(fid,)).fetchone()
+            conn.close(); return _ok(dict(row)) if row else _err("Topilmadi",404)
+
+        # DELETE /api/v1/farms/{id}
+        if method == "DELETE" and len(parts) == 4:
+            conn.execute("UPDATE farms SET is_active=0 WHERE id=?",(parts[3],))
+            conn.commit(); conn.close(); return _ok({"message":"O'chirildi"})
+
+        conn.close()
+
+    # ── Ferma qarzlari ────────────────────────────────────────
+    if res == "farm-debts":
+        conn = _db()
+
+        # POST /api/v1/farm-debts — yangi qarz
+        if method == "POST" and len(parts) == 3:
+            did   = str(uuid.uuid4())
+            fid   = body.get("farm_id","")
+            amt   = float(body.get("amount",0))
+            paid  = float(body.get("paid_amount",0))
+            conn.execute(
+                "INSERT INTO farm_debts VALUES (?,?,?,?,?,?,?,?,?)",
+                (did, fid, amt, paid, amt-paid,
+                 body.get("description","Nasiya"), "active",
+                 body.get("due_date"), _now())
+            )
+            conn.execute(
+                "UPDATE farms SET total_debt=total_debt+? WHERE id=?",
+                (amt-paid, fid)
+            )
+            conn.commit()
+            row = dict(conn.execute("SELECT * FROM farm_debts WHERE id=?",(did,)).fetchone())
+            conn.close(); return _ok(row, 201)
+
+        # POST /api/v1/farm-debts/{id}/pay — to'lov
+        if method == "POST" and len(parts) == 5 and parts[4] == "pay":
+            did      = parts[3]
+            pay_amt  = float(body.get("amount",0))
+            debt     = conn.execute("SELECT * FROM farm_debts WHERE id=?",(did,)).fetchone()
+            if not debt: conn.close(); return _err("Qarz topilmadi",404)
+            debt = dict(debt)
+
+            actual   = min(pay_amt, debt["remaining"])
+            new_paid = debt["paid_amount"] + actual
+            new_rem  = debt["remaining"]   - actual
+            new_st   = "paid" if new_rem <= 0 else "active"
+
+            conn.execute(
+                "UPDATE farm_debts SET paid_amount=?,remaining=?,status=? WHERE id=?",
+                (new_paid, new_rem, new_st, did)
+            )
+            conn.execute(
+                "INSERT INTO farm_payments VALUES (?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), debt["farm_id"], did,
+                 actual, body.get("payment_method","cash"),
+                 body.get("note",""), _now())
+            )
+            conn.execute(
+                "UPDATE farms SET total_debt=MAX(0,total_debt-?) WHERE id=?",
+                (actual, debt["farm_id"])
+            )
+            conn.commit()
+            updated = dict(conn.execute("SELECT * FROM farm_debts WHERE id=?",(did,)).fetchone())
+            farm    = dict(conn.execute("SELECT * FROM farms WHERE id=?",(debt["farm_id"],)).fetchone())
+            conn.close()
+            return _ok({
+                "debt":     updated,
+                "farm":     farm,
+                "paid":     actual,
+                "receipt_number": _receipt().replace("PK-","FM-"),
+                "message":  "To'liq yopildi ✅" if new_st=="paid" else f"Qoldiq: {int(new_rem):,} so'm"
+            })
+
+
+        # POST /api/v1/farm-debts/{farm_id}/pay-all — BARCHA QARZNI YOPISH
+        if method == "POST" and len(parts) == 5 and parts[4] == "pay-all":
+            fid     = parts[3]  # bu holda farm_id
+            pay_amt = float(body.get("amount", 0))
+            method_p= body.get("payment_method","cash")
+            note    = body.get("note","Barcha qarz to'landi")
+
+            active_debts = _rows(conn.execute(
+                "SELECT * FROM farm_debts WHERE farm_id=? AND status='active' ORDER BY created_at",
+                (fid,)
+            ))
+            remaining_pay = pay_amt
+            total_paid    = 0
+            paid_count    = 0
+
+            for debt in active_debts:
+                if remaining_pay <= 0: break
+                actual   = min(remaining_pay, debt["remaining"])
+                new_paid = debt["paid_amount"] + actual
+                new_rem  = debt["remaining"]   - actual
+                new_st   = "paid" if new_rem <= 0 else "active"
+                conn.execute(
+                    "UPDATE farm_debts SET paid_amount=?,remaining=?,status=? WHERE id=?",
+                    (new_paid, new_rem, new_st, debt["id"])
+                )
+                conn.execute(
+                    "INSERT INTO farm_payments VALUES (?,?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), fid, debt["id"], actual, method_p, note, _now())
+                )
+                remaining_pay -= actual
+                total_paid    += actual
+                paid_count    += 1
+
+            conn.execute(
+                "UPDATE farms SET total_debt=MAX(0,total_debt-?) WHERE id=?",
+                (total_paid, fid)
+            )
+            conn.commit()
+            farm = dict(conn.execute("SELECT * FROM farms WHERE id=?",(fid,)).fetchone())
+            conn.close()
+            return _ok({
+                "farm":           farm,
+                "total_paid":     total_paid,
+                "paid_count":     paid_count,
+                "receipt_number": _receipt().replace("PK-","FM-"),
+                "message":        f"{paid_count} ta qarz yopildi, jami {int(total_paid):,} so'm"
+            })
+
+        conn.close()
+
+    # ── Ferma statistikasi ────────────────────────────────────
+    if res == "farm-stats":
+        conn = _db()
+        row = conn.execute("""
+            SELECT
+                COUNT(*) as total_farms,
+                SUM(total_debt) as total_debt,
+                SUM(total_supplied) as total_supplied,
+                (SELECT COUNT(*) FROM farm_debts WHERE status='active') as active_debts,
+                (SELECT COALESCE(SUM(amount),0) FROM farm_payments) as total_collected
+            FROM farms WHERE is_active=1
+        """).fetchone()
+        conn.close(); return _ok(dict(row))
+
     # ── Audit log ─────────────────────────────────────────────
-    if res == "audit-log":
-        return _ok([
+    if res == "audit-log":        return _ok([
             {"id":"a-1","user_name":"Demo Kassir","entity_type":"sale","action":"created",
              "after_state":{"total":"50000"},"created_at":_now()},
             {"id":"a-2","user_name":"Demo Menejer","entity_type":"product","action":"updated",
@@ -861,6 +1171,74 @@ def handle_api(method, path, body, params):
         conn.close()
         return _ok(dict(row))
 
+
+    if res == "farm-supplies":
+        conn = _db()
+
+        # POST /api/v1/farm-supplies — yangi yetkazma
+        if method == "POST" and len(parts) == 3:
+            sid     = str(uuid.uuid4())
+            fid     = body.get("farm_id","")
+            total   = float(body.get("total_amount",0))
+            paid    = float(body.get("paid_amount",0))
+            debt_a  = total - paid
+            ptype   = body.get("payment_type","cash")
+            snum    = body.get("supply_number") or _receipt().replace("PK-","YT-")
+
+            conn.execute(
+                "INSERT INTO farm_supplies VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (sid, fid, snum, total, ptype, paid, debt_a,
+                 body.get("notes",""), _now(), _now())
+            )
+            # Yetkazma elementlari
+            for item in body.get("items",[]):
+                conn.execute(
+                    "INSERT INTO farm_supply_items VALUES (?,?,?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), sid, fid,
+                     item.get("product_name",""),
+                     item.get("quantity",1),
+                     item.get("unit","pcs"),
+                     item.get("unit_price",0),
+                     item.get("total_price",0))
+                )
+            # Ferma statistikasini yangilash
+            conn.execute(
+                "UPDATE farms SET total_supplied=total_supplied+?, total_debt=total_debt+? WHERE id=?",
+                (total, debt_a, fid)
+            )
+            # Agar nasiya bo'lsa — farm_debt ham yarat
+            if debt_a > 0:
+                conn.execute(
+                    "INSERT INTO farm_debts VALUES (?,?,?,?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), fid, debt_a, 0, debt_a,
+                     f"Yetkazma {snum}", "active", None, _now())
+                )
+            conn.commit()
+            row = dict(conn.execute("SELECT * FROM farm_supplies WHERE id=?",(sid,)).fetchone())
+            row["items"] = _rows(conn.execute(
+                "SELECT * FROM farm_supply_items WHERE supply_id=?",(sid,)))
+            conn.close(); return _ok(row, 201)
+
+        # GET /api/v1/farm-supplies?farm_id=xxx
+        if method == "GET" and len(parts) == 3:
+            fid = params.get("farm_id","")
+            if fid:
+                rows = _rows(conn.execute(
+                    "SELECT * FROM farm_supplies WHERE farm_id=? ORDER BY supply_date DESC",(fid,)))
+            else:
+                rows = _rows(conn.execute(
+                    "SELECT fs.*, f.name as farm_name FROM farm_supplies fs "
+                    "JOIN farms f ON fs.farm_id=f.id ORDER BY fs.supply_date DESC LIMIT 50"))
+            for r in rows:
+                r["items"] = _rows(conn.execute(
+                    "SELECT * FROM farm_supply_items WHERE supply_id=?",(r["id"],)))
+            conn.close(); return _ok(rows)
+
+
+
+# ══════════════════════════════════════════════════════════════
+# 4. Main
+# ══════════════════════════════════════════════════════════════
     return _err(f"'{path}' topilmadi", 404)
 
 
@@ -940,9 +1318,238 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 
+
+
 # ══════════════════════════════════════════════════════════════
-# 4. Main
+# 3. HTTP Handler
 # ══════════════════════════════════════════════════════════════
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"  [{ts}] {self.command:6} {self.path}  →  {fmt%args}")
+
+    def _cors(self):
+        self.send_header("Access-Control-Allow-Origin",  "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Tenant-ID")
+
+    def _send_json(self, status, data):
+        body = json.dumps(data, ensure_ascii=False, default=str).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_html(self, content: bytes):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _parse(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = dict(urllib.parse.parse_qsl(parsed.query))
+        body   = {}
+        n = int(self.headers.get("Content-Length", 0))
+        if n:
+            try: body = json.loads(self.rfile.read(n))
+            except Exception: body = {}
+        return parsed.path, params, body
+
+    def _dispatch(self, method):
+        path, params, body = self._parse()
+
+        # UI sahifalar
+        if path in ("/", "/pos", "/admin", "/login"):
+            idx = os.path.join(STATIC, "index.html")
+            with open(idx, "rb") as f:
+                self._send_html(f.read())
+            return
+
+        # API
+        if path.startswith("/api/") or path == "/health":
+            try:
+                status, data = handle_api(method, path, body, params)
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                status, data = 500, {"error": str(e)}
+            self._send_json(status, data)
+            return
+
+        self._send_json(404, {"error": "Not found"})
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
+
+    def do_GET(self):    self._dispatch("GET")
+    def do_POST(self):   self._dispatch("POST")
+    def do_PUT(self):    self._dispatch("PUT")
+    def do_DELETE(self): self._dispatch("DELETE")
+    def do_PATCH(self):  self._dispatch("PATCH")
+
+
+
+
+# ══════════════════════════════════════════════════════════════
+# 3. HTTP Handler
+# ══════════════════════════════════════════════════════════════
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"  [{ts}] {self.command:6} {self.path}  →  {fmt%args}")
+
+    def _cors(self):
+        self.send_header("Access-Control-Allow-Origin",  "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Tenant-ID")
+
+    def _send_json(self, status, data):
+        body = json.dumps(data, ensure_ascii=False, default=str).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_html(self, content: bytes):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _parse(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = dict(urllib.parse.parse_qsl(parsed.query))
+        body   = {}
+        n = int(self.headers.get("Content-Length", 0))
+        if n:
+            try: body = json.loads(self.rfile.read(n))
+            except Exception: body = {}
+        return parsed.path, params, body
+
+    def _dispatch(self, method):
+        path, params, body = self._parse()
+
+        # UI sahifalar
+        if path in ("/", "/pos", "/admin", "/login"):
+            idx = os.path.join(STATIC, "index.html")
+            with open(idx, "rb") as f:
+                self._send_html(f.read())
+            return
+
+        # API
+        if path.startswith("/api/") or path == "/health":
+            try:
+                status, data = handle_api(method, path, body, params)
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                status, data = 500, {"error": str(e)}
+            self._send_json(status, data)
+            return
+
+        self._send_json(404, {"error": "Not found"})
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
+
+    def do_GET(self):    self._dispatch("GET")
+    def do_POST(self):   self._dispatch("POST")
+    def do_PUT(self):    self._dispatch("PUT")
+    def do_DELETE(self): self._dispatch("DELETE")
+    def do_PATCH(self):  self._dispatch("PATCH")
+
+
+
+
+
+# ══════════════════════════════════════════════════════════════
+# 3. HTTP Handler
+# ══════════════════════════════════════════════════════════════
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"  [{ts}] {self.command:6} {self.path}  →  {fmt%args}")
+
+    def _cors(self):
+        self.send_header("Access-Control-Allow-Origin",  "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Tenant-ID")
+
+    def _send_json(self, status, data):
+        body = json.dumps(data, ensure_ascii=False, default=str).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_html(self, content: bytes):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _parse(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = dict(urllib.parse.parse_qsl(parsed.query))
+        body   = {}
+        n = int(self.headers.get("Content-Length", 0))
+        if n:
+            try: body = json.loads(self.rfile.read(n))
+            except Exception: body = {}
+        return parsed.path, params, body
+
+    def _dispatch(self, method):
+        path, params, body = self._parse()
+
+        # UI sahifalar
+        if path in ("/", "/pos", "/admin", "/login"):
+            idx = os.path.join(STATIC, "index.html")
+            with open(idx, "rb") as f:
+                self._send_html(f.read())
+            return
+
+        # API
+        if path.startswith("/api/") or path == "/health":
+            try:
+                status, data = handle_api(method, path, body, params)
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                status, data = 500, {"error": str(e)}
+            self._send_json(status, data)
+            return
+
+        self._send_json(404, {"error": "Not found"})
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
+
+    def do_GET(self):    self._dispatch("GET")
+    def do_POST(self):   self._dispatch("POST")
+    def do_PUT(self):    self._dispatch("PUT")
+    def do_DELETE(self): self._dispatch("DELETE")
+    def do_PATCH(self):  self._dispatch("PATCH")
+
+
+
+    # ── Ferma yetkazmalari ────────────────────────────────────
+
 if __name__ == "__main__":
     print("━" * 55)
     print("  PossKassa Demo Server — ishga tushmoqda")
