@@ -273,14 +273,24 @@ def _init_mysql():
     # MySQL da har bir CREATE TABLE alohida
     for stmt in _TABLES_MYSQL.split(";"):
         stmt = stmt.strip()
-        if stmt:
+        if stmt and len(stmt) > 10:
             try:
                 c.execute(stmt)
             except Exception as e:
-                if "already exists" in str(e) or "1050" in str(e):
-                    pass  # Jadval mavjud — o'tkazib yubor
-                else:
-                    print(f"  ⚠️  SQL xato: {e}")
+                if "1050" in str(e): pass  # jadval mavjud
+                else: print(f"  ⚠️  SQL: {e}")
+
+    # image_url ustunini qo'shish (agar yo'q bo'lsa)
+    try:
+        c.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
+        conn.commit()
+        print("  ✅ image_url ustuni qo'shildi")
+    except Exception as e:
+        if "1060" in str(e) or "Duplicate" in str(e):
+            pass  # allaqachon mavjud
+        else:
+            print(f"  ⚠️  image_url: {e}")
+
     _seed_mysql(c, conn)
     conn.commit()
     conn.close()
@@ -292,6 +302,11 @@ def _init_sqlite():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.executescript(_TABLES_SQLITE)
+    # image_url ustunini qo'shish (agar yo'q bo'lsa)
+    try:
+        c.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
+        conn.commit()
+    except: pass
     _seed_sqlite(c)
     conn.commit()
     conn.close()
