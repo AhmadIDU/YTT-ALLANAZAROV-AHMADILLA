@@ -1036,270 +1036,297 @@ async function farms() {
   </div>`;
   window._farmsList = flist;
 }
-// ═══════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
+// 💳 QARZDORLAR MODULI — to'liq qayta yozildi
+// ═══════════════════════════════════════════════════════════════
+
+// ── Asosiy sahifa ────────────────────────────────────────────
 async function debtors() {
   const el = document.getElementById('main-content');
-  el.innerHTML = '<p style="color:#94a3b8;padding:40px;text-align:center">⏳ Yuklanmoqda...</p>';
+  el.innerHTML = '<p style="text-align:center;color:#94a3b8;padding:40px;font-size:16px">⏳ Yuklanmoqda...</p>';
 
-  const [dlist, stats, allDebts] = await Promise.all([
-    api('GET','/debtors'),
-    api('GET','/debt-stats'),
-    api('GET','/debts?status=active'),
-  ]);
+  try {
+    const [dlist, stats] = await Promise.all([
+      api('GET', '/debtors'),
+      api('GET', '/debt-stats'),
+    ]);
 
-  // Har bir qarzdor uchun qarzlarini debtors jadvaliga qo'shamiz
-  const debtsByDebtor = {};
-  (allDebts||[]).forEach(d => {
-    if (!debtsByDebtor[d.debtor_id]) debtsByDebtor[d.debtor_id] = [];
-    debtsByDebtor[d.debtor_id].push(d);
+    window._debtorsList = dlist || [];
+
+    el.innerHTML = `
+    <!-- Statistika -->
+    <div class="grid-4" style="margin-bottom:16px">
+      <div class="card">
+        <h3>Jami qarzdorlar</h3>
+        <div class="val">${(dlist||[]).length}</div>
+        <div class="sub">nafar</div>
+      </div>
+      <div class="card">
+        <h3>Umumiy qarz</h3>
+        <div class="val" style="color:#dc2626">${fmt(stats.total_debt_amount||0)}</div>
+      </div>
+      <div class="card">
+        <h3>Faol qarzlar</h3>
+        <div class="val" style="color:#f59e0b">${stats.active_debts||0}</div>
+        <div class="sub">ta</div>
+      </div>
+      <div class="card">
+        <h3>Yig'ilgan pul</h3>
+        <div class="val" style="color:#16a34a">${fmt(stats.total_collected||0)}</div>
+      </div>
+    </div>
+
+    <!-- Qidiruv + tugma -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+      <div class="search-box" style="flex:1;max-width:320px">
+        <span class="search-icon">🔍</span>
+        <input id="debtor-search" placeholder="Ism yoki telefon..." oninput="filterDebtors(this.value)">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-gray" onclick="debtors()">🔄</button>
+        <button class="btn btn-blue" onclick="addDebtorModal()">➕ Yangi qarzdor</button>
+      </div>
+    </div>
+
+    <!-- Jadval -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:180px">Qarzdor</th>
+            <th>Qarz tavsifi</th>
+            <th style="text-align:right">Jami qarz</th>
+            <th style="text-align:right">Qoldiq</th>
+            <th style="text-align:center;width:80px">To'lov %</th>
+            <th style="width:160px">Amal</th>
+          </tr>
+        </thead>
+        <tbody id="debtors-tbody">
+          <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">Yuklanmoqda...</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+
+    await renderDebtorsTable(dlist);
+
+  } catch(e) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:#dc2626">Xato: ${e.message}</div>`;
+    console.error('debtors xato:', e);
+  }
+}
+
+// ── Jadvalni to'ldirish ───────────────────────────────────────
+async function renderDebtorsTable(dlist) {
+  const allDebts = await api('GET', '/debts?status=active') || [];
+
+  // Har bir qarzdor uchun qarzlarini guruhlash
+  const byDebtor = {};
+  allDebts.forEach(d => {
+    if (!byDebtor[d.debtor_id]) byDebtor[d.debtor_id] = [];
+    byDebtor[d.debtor_id].push(d);
   });
 
-  // Kengaytirilgan jadval satrlari — har bir qarz alohida qator
-  const tableRows = (dlist||[]).map(d => {
-    const myDebts = debtsByDebtor[d.id] || [];
-    const cls = d.total_debt > 200000 ? '#fee2e2' : d.total_debt > 50000 ? '#fef9c3' : '#f0fdf4';
+  const tbody = document.getElementById('debtors-tbody');
+  if (!tbody) return;
 
-    if (myDebts.length === 0) {
-      // Qarzi yo'q
-      return `
-      <tr style="background:${cls}">
-        <td style="font-weight:600">${d.full_name}</td>
-        <td style="color:#64748b">${d.phone||'—'}</td>
-        <td style="color:#64748b">${d.address||'—'}</td>
-        <td>—</td>
+  if ((dlist||[]).length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Qarzdorlar yo\'q</td></tr>';
+    return;
+  }
+
+  let rows = '';
+  (dlist||[]).forEach(d => {
+    const debts = byDebtor[d.id] || [];
+    const bg = d.total_debt > 200000 ? '#fff5f5' : d.total_debt > 50000 ? '#fffbeb' : '#f0fdf4';
+    const border = d.total_debt > 200000 ? '#fca5a5' : d.total_debt > 50000 ? '#fcd34d' : '#86efac';
+
+    if (debts.length === 0) {
+      // Qarz yo'q
+      rows += `
+      <tr style="background:${bg}">
+        <td style="border-left:3px solid ${border}">
+          <div style="font-weight:600">${d.full_name}</div>
+          <div style="font-size:11px;color:#64748b">${d.phone||'—'}</div>
+          ${d.notes ? `<div style="font-size:10px;color:#94a3b8">${d.notes}</div>` : ''}
+        </td>
+        <td style="color:#94a3b8;font-size:12px">Qarz yo'q</td>
         <td style="text-align:right;color:#16a34a;font-weight:600">0 so'm</td>
         <td style="text-align:right;color:#16a34a">0 so'm</td>
+        <td style="text-align:center;font-size:11px;color:#16a34a">✅</td>
         <td>
-          <button class="btn btn-blue" style="padding:4px 10px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+ Qarz</button>
+          <button class="btn btn-blue" style="padding:3px 10px;font-size:11px"
+            onclick="addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')">+ Qarz</button>
+          <button class="btn btn-gray" style="padding:3px 8px;font-size:11px;margin-left:3px"
+            onclick="debtorCard('${d.id}')">👁</button>
         </td>
       </tr>`;
+      return;
     }
 
-    // Har bir qarz uchun qator
-    return myDebts.map((debt, idx) => `
-    <tr style="background:${cls}">
-      ${idx===0 ? `<td rowspan="${myDebts.length}" style="font-weight:700;vertical-align:top;padding-top:10px">
-        ${d.full_name}
-        <div style="font-size:11px;color:#64748b;font-weight:400">${d.phone||'—'}</div>
-        <div style="font-size:11px;color:#64748b">${d.address||'—'}</div>
-      </td>` : ''}
-      <td style="color:#64748b;font-size:12px">${debt.description||'Nasiya'}</td>
-      <td style="text-align:right;font-weight:600">${fmt(debt.amount)}</td>
-      <td style="text-align:right;color:${debt.remaining>0?'#dc2626':'#16a34a'};font-weight:700">${fmt(debt.remaining)}</td>
-      <td style="text-align:center">
-        <div class="progress-bar" style="width:80px;display:inline-block">
-          <div class="progress-fill" style="width:${debt.amount>0?Math.round(debt.paid_amount/debt.amount*100):0}%"></div>
-        </div>
-        <span style="font-size:10px;color:#64748b;margin-left:4px">${debt.amount>0?Math.round(debt.paid_amount/debt.amount*100):100}%</span>
-      </td>
-      <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
+    // Har bir qarz alohida qator
+    debts.forEach((debt, idx) => {
+      const pct = debt.amount > 0 ? Math.round(debt.paid_amount / debt.amount * 100) : 100;
+      const pctColor = pct >= 80 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
+
+      rows += `
+      <tr style="background:${bg}">
+        ${idx === 0 ? `
+        <td rowspan="${debts.length}" style="vertical-align:top;padding-top:10px;border-left:3px solid ${border}">
+          <div style="font-weight:700">${d.full_name}</div>
+          <div style="font-size:11px;color:#64748b">${d.phone||'—'}</div>
+          ${d.notes ? `<div style="font-size:10px;color:#94a3b8">${d.notes}</div>` : ''}
+          <div style="margin-top:6px">
+            <div style="font-size:10px;color:#64748b">Jami qarz:</div>
+            <div style="font-weight:700;color:#dc2626;font-size:14px">${fmt(d.total_debt)}</div>
+          </div>
+        </td>` : ''}
+        <td style="font-size:12px;color:#374151">
+          ${debt.description||'Nasiya'}
+          ${debt.due_date ? `<div style="font-size:10px;color:#94a3b8">📅 ${debt.due_date}</div>` : ''}
+        </td>
+        <td style="text-align:right;font-size:13px">${fmt(debt.amount)}</td>
+        <td style="text-align:right;font-weight:700;color:${debt.remaining > 0 ? '#dc2626' : '#16a34a'}">
+          ${fmt(debt.remaining)}
+        </td>
+        <td style="text-align:center">
+          <div style="font-size:11px;font-weight:600;color:${pctColor}">${pct}%</div>
+          <div style="height:4px;background:#f1f5f9;border-radius:2px;margin-top:2px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:2px"></div>
+          </div>
+        </td>
+        <td>
           ${debt.remaining > 0 ? `
-          <button class="btn btn-green" style="padding:3px 8px;font-size:11px"
-            onclick="quickPay('${debt.id}','${d.full_name}',${debt.remaining})">
-            💵 To'lash
-          </button>
-          <button class="btn btn-gray" style="padding:3px 8px;font-size:11px"
-            onclick="payDebtModal('${debt.id}','${d.full_name}',${debt.remaining})">
-            ⚙️
-          </button>` : '<span class="badge badge-green" style="font-size:10px">✅ Yopildi</span>'}
-          ${idx===0?`<button class="btn btn-blue" style="padding:3px 8px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+</button>`:''}
-        </div>
-      </td>
-    </tr>`).join('');
-  }).join('');
-
-  el.innerHTML = `
-  <!-- Statistika -->
-  <div class="grid-4" style="margin-bottom:16px">
-    <div class="card"><h3>Qarzdorlar</h3><div class="val">${(dlist||[]).length}</div></div>
-    <div class="card"><h3>Umumiy qarz</h3><div class="val" style="color:#dc2626">${fmt(stats.total_debt_amount||0)}</div></div>
-    <div class="card"><h3>Faol qarzlar</h3><div class="val" style="color:#f59e0b">${stats.active_debts||0} ta</div></div>
-    <div class="card"><h3>Yig'ilgan</h3><div class="val" style="color:#16a34a">${fmt(stats.total_collected||0)}</div></div>
-  </div>
-
-  <!-- Amallar -->
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-    <div class="search-box" style="max-width:300px;flex:1">
-      <span class="search-icon">🔍</span>
-      <input id="debtor-search" placeholder="Ism yoki telefon..." oninput="filterDebtors(this.value)">
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-gray" onclick="debtors()" style="font-size:12px">🔄 Yangilash</button>
-      <button class="btn btn-blue" onclick="addDebtorModal()">➕ Yangi qarzdor</button>
-    </div>
-  </div>
-
-  <!-- Barcha qarzlar jadval ko'rinishida -->
-  <div class="card" style="padding:0;overflow:hidden">
-    <table class="tbl" id="debtors-table">
-      <thead>
-        <tr>
-          <th>Ism</th>
-          <th>Tavsif</th>
-          <th style="text-align:right">Jami</th>
-          <th style="text-align:right">Qoldiq</th>
-          <th style="text-align:center">To'lov %</th>
-          <th>Amal</th>
-        </tr>
-      </thead>
-      <tbody id="debtors-tbody">
-        ${tableRows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Qarzdorlar yo\'q</td></tr>'}
-      </tbody>
-    </table>
-  </div>`;
-
-  window._debtorsList = dlist;
-  window._allDebtsList = allDebts||[];
-}
-
-// ── Tez to'lash (1 bosish, modal yo'q) ────────────────────────────
-async function quickPay(debtId, name, remaining) {
-  if (!confirm(`${name}\n\nQoldiq: ${fmt(remaining)}\n\nTo'liq to'lansinmi?`)) return;
-  const res = await api('POST', `/debts/${debtId}/pay`, {
-    amount: remaining,
-    payment_method: 'cash',
-    note: 'Tez to\'lov'
+          <div style="display:flex;gap:3px;flex-wrap:wrap">
+            <button class="btn btn-green" style="padding:3px 8px;font-size:11px"
+              onclick="quickPayDebt('${debt.id}','${d.full_name.replace(/'/g,"\\'")}',${debt.remaining})">
+              💵 To'lash
+            </button>
+            <button class="btn btn-gray" style="padding:3px 6px;font-size:11px"
+              onclick="customPayDebt('${debt.id}','${d.full_name.replace(/'/g,"\\'")}',${debt.remaining})">
+              ⚙️
+            </button>
+            ${idx === 0 ? `
+            <button class="btn btn-blue" style="padding:3px 6px;font-size:11px"
+              onclick="addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')">+</button>
+            ` : ''}
+          </div>` : `
+          <span class="badge badge-green" style="font-size:10px">✅ Yopildi</span>
+          ${idx === 0 ? `
+          <button class="btn btn-blue" style="padding:2px 6px;font-size:10px;margin-left:2px"
+            onclick="addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')">+</button>
+          ` : ''}
+          `}
+        </td>
+      </tr>`;
+    });
   });
-  toast(`✅ ${res.message || fmt(remaining) + ' to\'landi!'}`);
-  printDebtPayReceipt(res);
-  debtors();
+
+  tbody.innerHTML = rows;
 }
 
+// ── Qidirish ─────────────────────────────────────────────────
 function filterDebtors(q) {
   const filtered = q
     ? (window._debtorsList||[]).filter(d =>
         d.full_name.toLowerCase().includes(q.toLowerCase()) ||
         (d.phone||'').includes(q))
     : window._debtorsList||[];
-
-  const debtsByDebtor = {};
-  (window._allDebtsList||[]).forEach(d => {
-    if (!debtsByDebtor[d.debtor_id]) debtsByDebtor[d.debtor_id] = [];
-    debtsByDebtor[d.debtor_id].push(d);
-  });
-
-  const tbody = document.getElementById('debtors-tbody');
-  if (!tbody) return;
-
-  const rows = filtered.map(d => {
-    const myDebts = debtsByDebtor[d.id] || [];
-    const cls = d.total_debt > 200000 ? '#fee2e2' : d.total_debt > 50000 ? '#fef9c3' : '#f0fdf4';
-    if (myDebts.length === 0) {
-      return `<tr style="background:${cls}">
-        <td style="font-weight:600">${d.full_name}<br><span style="font-size:11px;color:#64748b">${d.phone||'—'}</span></td>
-        <td>—</td><td style="text-align:right">0</td>
-        <td style="text-align:right;color:#16a34a;font-weight:600">0 so'm</td>
-        <td style="text-align:center">100%</td>
-        <td><button class="btn btn-blue" style="padding:3px 8px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+ Qarz</button></td>
-      </tr>`;
-    }
-    return myDebts.map((debt,idx) => `
-    <tr style="background:${cls}">
-      ${idx===0?`<td rowspan="${myDebts.length}" style="font-weight:700;vertical-align:top">
-        ${d.full_name}<div style="font-size:11px;color:#64748b">${d.phone||'—'}</div></td>`:''}
-      <td style="color:#64748b;font-size:12px">${debt.description||'Nasiya'}</td>
-      <td style="text-align:right">${fmt(debt.amount)}</td>
-      <td style="text-align:right;color:${debt.remaining>0?'#dc2626':'#16a34a'};font-weight:700">${fmt(debt.remaining)}</td>
-      <td style="text-align:center;font-size:11px">${debt.amount>0?Math.round(debt.paid_amount/debt.amount*100):100}%</td>
-      <td>${debt.remaining>0?`
-        <button class="btn btn-green" style="padding:3px 8px;font-size:11px" onclick="quickPay('${debt.id}','${d.full_name}',${debt.remaining})">💵 To'lash</button>
-        ${idx===0?`<button class="btn btn-blue" style="padding:3px 8px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+</button>`:''}
-      `:'<span class="badge badge-green" style="font-size:10px">✅</span>'}</td>
-    </tr>`).join('');
-  }).join('');
-
-  tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">Topilmadi</td></tr>';
+  renderDebtorsTable(filtered);
 }
 
+// ── Tez to'lash (confirm dialog) ─────────────────────────────
+async function quickPayDebt(debtId, name, remaining) {
+  if (!confirm(`${name}\n\nTo'liq summa: ${fmt(remaining)}\n\nTo'liq to'lansinmi?`)) return;
+  const res = await api('POST', `/debts/${debtId}/pay`, {
+    amount: remaining,
+    payment_method: 'cash',
+    note: "To'liq to'landi",
+  });
+  if (res.error) { toast(res.error, 'err'); return; }
+  toast(`✅ ${res.message || fmt(remaining) + " to'landi!"}`);
+  printDebtPayReceipt(res);
+  debtors();
+}
 
-// Qarzdor tafsiloti modali
-async function debtorDetail(did) {
-  const d = await api('GET', `/debtors/${did}`);
-  const debts = d.debts || [];
-  const payments = d.payments || [];
-
-  const debtRows = debts.map(debt => {
-    const pct = debt.amount > 0 ? Math.round(debt.paid_amount / debt.amount * 100) : 0;
-    return `
-    <div style="background:#f8fafc;border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid ${debt.status==='paid'?'#bbf7d0':'#fde68a'}">
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-        <div>
-          <span style="font-weight:600">${debt.description||'Nasiya'}</span>
-          <span class="badge ${debt.status==='paid'?'badge-green':'badge-yellow'}" style="margin-left:8px;font-size:10px">${debt.status==='paid'?'✅ Yopildi':'⏳ Faol'}</span>
-        </div>
-        <span style="font-weight:700;color:#dc2626">${fmt(debt.remaining)}</span>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b">
-        <span>Jami: ${fmt(debt.amount)}</span>
-        <span>To'langan: ${fmt(debt.paid_amount)} (${pct}%)</span>
-        ${debt.due_date?`<span>📅 ${debt.due_date}</span>`:''}
-      </div>
-      ${debt.status==='active'?`
-      <button class="btn btn-green" style="margin-top:8px;padding:5px 14px;font-size:12px;width:100%"
-        onclick="payDebtModal('${debt.id}','${d.full_name}',${debt.remaining})">
-        💵 To'lash
-      </button>`:''}
-    </div>`;
-  }).join('');
-
-  const payHistory = payments.slice(0,5).map(p =>
-    `<div class="tbl" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f1f5f9;font-size:12px">
-      <span style="color:#64748b">${(p.paid_at||'').slice(0,10)}</span>
-      <span>${p.note||'To\'lov'}</span>
-      <span style="font-weight:600;color:#16a34a">+${fmt(p.amount)}</span>
-    </div>`
-  ).join('');
-
+// ── Miqdor tanlash bilan to'lash ─────────────────────────────
+function customPayDebt(debtId, name, remaining) {
   document.body.insertAdjacentHTML('beforeend', `
-  <div class="modal-bg" id="debtor-detail-modal">
-    <div class="modal" style="max-width:560px">
+  <div class="modal-bg" id="custom-pay-modal">
+    <div class="modal">
       <div class="modal-header">
-        <div>
-          <h3>👤 ${d.full_name}</h3>
-          <div style="font-size:12px;color:#64748b;margin-top:2px">📞 ${d.phone||'—'} | ${d.address||'—'}</div>
+        <h3>💵 To'lov — ${name}</h3>
+        <button class="btn btn-gray" onclick="document.getElementById('custom-pay-modal').remove()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#fef9c3;border-radius:10px;padding:14px;text-align:center;margin-bottom:14px">
+          <div style="font-size:11px;color:#a16207">Qoldiq qarz</div>
+          <div style="font-size:28px;font-weight:800;color:#dc2626">${fmt(remaining)}</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span style="font-size:20px;font-weight:800;color:#dc2626">${fmt(d.total_debt)}</span>
-          <button class="btn btn-gray" onclick="document.getElementById('debtor-detail-modal').remove()">✕</button>
+        <div class="form-row cols-2">
+          <div>
+            <label>To'lov miqdori *</label>
+            <input id="cpay-amount" type="number" min="1" max="${remaining}" value="${remaining}" autofocus>
+          </div>
+          <div>
+            <label>To'lov usuli</label>
+            <select id="cpay-method">
+              <option value="cash">💵 Naqd</option>
+              <option value="uzcard">💳 Uzcard</option>
+              <option value="humo">💳 Humo</option>
+              <option value="payme">📱 Payme</option>
+              <option value="click">📱 Click</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div><label>Izoh</label><input id="cpay-note" placeholder="Naqd to'ladi..."></div>
         </div>
       </div>
-      <div class="modal-body" style="max-height:70vh;overflow-y:auto">
-        <div style="display:flex;gap:8px;margin-bottom:16px">
-          <button class="btn btn-blue" style="flex:1" onclick="document.getElementById('debtor-detail-modal').remove();addDebtModal('${d.id}','${d.full_name}')">+ Yangi qarz</button>
-          <button class="btn btn-green" style="flex:1" onclick="printDebtorCard('${d.id}')">🖨️ Chek</button>
-        </div>
-
-        <h4 style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:8px">
-          Qarzlar (${debts.length} ta)
-        </h4>
-        ${debtRows || '<p style="color:#94a3b8;text-align:center;padding:16px">Qarz yo\'q</p>'}
-
-        ${payments.length ? `
-        <h4 style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;margin:12px 0 8px">
-          Oxirgi to'lovlar
-        </h4>
-        ${payHistory}` : ''}
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="document.getElementById('custom-pay-modal').remove()">Bekor</button>
+        <button class="btn btn-green" onclick="processCustomPay('${debtId}')">✅ To'lash</button>
       </div>
     </div>
   </div>`);
-  window._currentDebtor = d;
 }
 
-// Yangi qarzdor qo'shish modali
+async function processCustomPay(debtId) {
+  const amount = parseFloat(document.getElementById('cpay-amount').value);
+  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!', 'err'); return; }
+  const res = await api('POST', `/debts/${debtId}/pay`, {
+    amount,
+    payment_method: document.getElementById('cpay-method').value,
+    note: document.getElementById('cpay-note').value || "To'lov",
+  });
+  if (res.error) { toast(res.error, 'err'); return; }
+  document.getElementById('custom-pay-modal')?.remove();
+  toast(`✅ ${res.message}`);
+  printDebtPayReceipt(res);
+  debtors();
+}
+
+// ── Yangi qarzdor ─────────────────────────────────────────────
 function addDebtorModal() {
   document.body.insertAdjacentHTML('beforeend', `
   <div class="modal-bg" id="add-debtor-modal">
     <div class="modal">
-      <div class="modal-header"><h3>➕ Yangi qarzdor</h3><button class="btn btn-gray" onclick="document.getElementById('add-debtor-modal').remove()">✕</button></div>
+      <div class="modal-header">
+        <h3>➕ Yangi qarzdor</h3>
+        <button class="btn btn-gray" onclick="document.getElementById('add-debtor-modal').remove()">✕</button>
+      </div>
       <div class="modal-body">
-        <div class="form-row"><div><label>Ism familiya *</label><input id="nd-name" placeholder="Karimov Botir" autofocus></div></div>
+        <div class="form-row">
+          <div><label>Ism familiya *</label>
+            <input id="nd-name" placeholder="Karimov Botir" autofocus></div>
+        </div>
         <div class="form-row cols-2">
           <div><label>Telefon</label><input id="nd-phone" placeholder="+998901234567"></div>
           <div><label>Manzil</label><input id="nd-address" placeholder="Chilonzor 5"></div>
         </div>
-        <div class="form-row"><div><label>Izoh</label><input id="nd-notes" placeholder="Doimiy mijoz..."></div></div>
+        <div class="form-row">
+          <div><label>Izoh</label><input id="nd-notes" placeholder="Doimiy mijoz..."></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-gray" onclick="document.getElementById('add-debtor-modal').remove()">Bekor</button>
@@ -1311,31 +1338,43 @@ function addDebtorModal() {
 
 async function saveDebtor() {
   const name = document.getElementById('nd-name').value.trim();
-  if (!name) { toast('Ism kiritilishi shart!','err'); return; }
-  const res = await api('POST','/debtors',{
+  if (!name) { toast('Ism kiritilishi shart!', 'err'); return; }
+  const res = await api('POST', '/debtors', {
     full_name: name,
     phone:    document.getElementById('nd-phone').value,
     address:  document.getElementById('nd-address').value,
     notes:    document.getElementById('nd-notes').value,
   });
+  if (res.error) { toast(res.error, 'err'); return; }
   document.getElementById('add-debtor-modal')?.remove();
   toast(`✅ ${res.full_name} qo'shildi!`);
   debtors();
 }
 
-// Qarz qo'shish modali
+// ── Yangi qarz qo'shish ──────────────────────────────────────
 function addDebtModal(did, name) {
   document.body.insertAdjacentHTML('beforeend', `
   <div class="modal-bg" id="add-debt-modal">
     <div class="modal">
-      <div class="modal-header"><h3>💳 Nasiya qo'shish — ${name}</h3><button class="btn btn-gray" onclick="document.getElementById('add-debt-modal').remove()">✕</button></div>
+      <div class="modal-header">
+        <h3>💳 Nasiya qo'shish — ${name}</h3>
+        <button class="btn btn-gray" onclick="document.getElementById('add-debt-modal').remove()">✕</button>
+      </div>
       <div class="modal-body">
         <div class="form-row cols-2">
-          <div><label>Qarz miqdori (so'm) *</label><input id="debt-amount" type="number" min="0" placeholder="50000" autofocus></div>
-          <div><label>Avans to'lov (so'm)</label><input id="debt-paid" type="number" min="0" placeholder="0"></div>
+          <div><label>Qarz miqdori (so'm) *</label>
+            <input id="debt-amount" type="number" min="1" placeholder="50000" autofocus></div>
+          <div><label>Avans to'lov</label>
+            <input id="debt-paid" type="number" min="0" value="0" placeholder="0"></div>
         </div>
-        <div class="form-row"><div><label>Tavsif</label><input id="debt-desc" placeholder="Oziq-ovqat xaridi..."></div></div>
-        <div class="form-row"><div><label>Muddat (ixtiyoriy)</label><input id="debt-due" type="date"></div></div>
+        <div class="form-row">
+          <div><label>Tavsif</label>
+            <input id="debt-desc" placeholder="Oziq-ovqat xaridi..."></div>
+        </div>
+        <div class="form-row">
+          <div><label>Muddat (ixtiyoriy)</label>
+            <input id="debt-due" type="date"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-gray" onclick="document.getElementById('add-debt-modal').remove()">Bekor</button>
@@ -1347,150 +1386,69 @@ function addDebtModal(did, name) {
 
 async function saveDebt(did) {
   const amount = parseFloat(document.getElementById('debt-amount').value);
-  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!','err'); return; }
-  const res = await api('POST','/debts',{
-    debtor_id: did,
+  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!', 'err'); return; }
+  const res = await api('POST', '/debts', {
+    debtor_id:   did,
     amount,
-    paid_amount: parseFloat(document.getElementById('debt-paid').value)||0,
+    paid_amount: parseFloat(document.getElementById('debt-paid').value) || 0,
     description: document.getElementById('debt-desc').value || 'Nasiya',
-    due_date: document.getElementById('debt-due').value || null,
+    due_date:    document.getElementById('debt-due').value || null,
   });
+  if (res.error) { toast(res.error, 'err'); return; }
   document.getElementById('add-debt-modal')?.remove();
   toast(`✅ ${fmt(res.remaining)} qarz qo'shildi!`);
   debtors();
 }
 
-// Qarzni to'lash modali
-function payDebtModal(debtId, name, remaining) {
-  document.body.insertAdjacentHTML('beforeend', `
-  <div class="modal-bg" id="pay-debt-modal">
-    <div class="modal">
-      <div class="modal-header"><h3>💵 To'lov — ${name}</h3><button class="btn btn-gray" onclick="document.getElementById('pay-debt-modal').remove()">✕</button></div>
-      <div class="modal-body">
-        <div style="background:#fef9c3;border-radius:10px;padding:12px;text-align:center;margin-bottom:16px">
-          <div style="font-size:12px;color:#a16207">Qoldiq qarz</div>
-          <div style="font-size:28px;font-weight:800;color:#dc2626">${fmt(remaining)}</div>
-        </div>
-        <div class="form-row cols-2">
-          <div><label>To'lov miqdori *</label><input id="pay-amount" type="number" min="1" max="${remaining}" value="${remaining}" autofocus></div>
-          <div><label>To'lov usuli</label>
-            <select id="pay-method">
-              <option value="cash">💵 Naqd</option>
-              <option value="uzcard">💳 Uzcard</option>
-              <option value="humo">💳 Humo</option>
-              <option value="payme">📱 Payme</option>
-              <option value="click">📱 Click</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row"><div><label>Izoh</label><input id="pay-note" placeholder="Naqd to'ladi..."></div></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-gray" onclick="document.getElementById('pay-debt-modal').remove()">Bekor</button>
-        <button class="btn btn-green" onclick="processPayment('${debtId}')">✅ To'lash</button>
-      </div>
-    </div>
-  </div>`);
-}
-
-async function processPayment(debtId) {
-  const amount = parseFloat(document.getElementById('pay-amount').value);
-  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!', 'err'); return; }
-  const res = await api('POST', `/debts/${debtId}/pay`, {
-    amount,
-    payment_method: document.getElementById('pay-method').value,
-    note: document.getElementById('pay-note').value,
-  });
-  document.getElementById('pay-debt-modal')?.remove();
-  document.getElementById('debtor-detail-modal')?.remove();
-  toast(res.message || '✅ To\'lov qabul qilindi!');
-
-  // Nasiya chekini chop etish
-  printDebtPayReceipt(res);
-  debtors();
-}
-
-// ═══════════════════════════════════════════════════════
-// 🖨️ CHK CHOP ETISH
-// ═══════════════════════════════════════════════════════
-
-// Sotuv cheki
-function printSaleReceipt(sale) {
-  const items = (sale.items||[]).map(i =>
-    `<div class="r-row"><span>${i.product_name} ×${i.quantity}</span><span>${fmt(i.total_price)}</span></div>`
-  ).join('');
-  const pays = (sale.payments||[]).map(p => {
-    const m = {cash:'Naqd',uzcard:'Uzcard',humo:'Humo',payme:'Payme',click:'Click',uzum:'Uzum'};
-    return `<div class="r-row"><span>${m[p.method]||p.method}:</span><span>${fmt(p.amount)}</span></div>`;
-  }).join('') || `<div class="r-row"><span>Naqd:</span><span>${fmt(sale.total_amount)}</span></div>`;
-
-  const html = `
-  <div class="receipt-paper">
-    <div class="r-title">PossKassa</div>
-    <div style="text-align:center;font-size:11px">Demo Do'kon</div>
-    <div class="r-divider"></div>
-    <div class="r-row"><span>Chek:</span><span>${sale.receipt_number||''}</span></div>
-    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
-    <div class="r-divider"></div>
-    ${items}
-    <div class="r-divider"></div>
-    <div class="r-row r-total"><span>JAMI:</span><span>${fmt(sale.total_amount)}</span></div>
-    <div class="r-divider"></div>
-    ${pays}
-    <div class="r-divider"></div>
-    ${sale.fiscal_url?`<div style="text-align:center;font-size:10px">OFD: ${sale.fiscal_url}</div><div class="r-divider"></div>`:''}
-    <div style="text-align:center;margin-top:8px">Xaridingiz uchun rahmat! 🙏</div>
-  </div>`;
-  showPrintModal(html, 'Sotuv Cheki');
-}
-
-// Nasiya to'lov cheki
-function printDebtPayReceipt(res) {
-  const debt = res.debt || {};
-  const debtor = res.debtor || {};
-  const html = `
-  <div class="receipt-paper">
-    <div class="r-title">PossKassa — Nasiya</div>
-    <div style="text-align:center;font-size:11px">To'lov Kvitansiyasi</div>
-    <div class="r-divider"></div>
-    <div class="r-row"><span>Chek:</span><span>${res.receipt_number||''}</span></div>
-    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
-    <div class="r-divider"></div>
-    <div class="r-row"><span>Qarzdor:</span><span><b>${debtor.full_name||''}</b></span></div>
-    <div class="r-row"><span>Tel:</span><span>${debtor.phone||'—'}</span></div>
-    <div class="r-divider"></div>
-    <div class="r-row r-total"><span>TO'LANDI:</span><span style="color:#16a34a">+${fmt(res.paid)}</span></div>
-    <div class="r-row"><span>Qoldiq qarz:</span><span style="color:#dc2626">${fmt(debt.remaining||0)}</span></div>
-    <div class="r-divider"></div>
-    <div style="text-align:center;font-size:11px">${res.message||''}</div>
-    <div style="text-align:center;margin-top:8px">Rahmat! 🙏</div>
-  </div>`;
-  showPrintModal(html, 'Nasiya To\'lov Cheki');
-}
-
-// Qarzdor kartasi (barcha qarzlar)
-async function printDebtorCard(did) {
+// ── Qarzdor hisobi cheki ──────────────────────────────────────
+async function debtorCard(did) {
   const d = await api('GET', `/debtors/${did}`);
+  if (d.error) { toast(d.error, 'err'); return; }
   const rows = (d.debts||[]).map(debt =>
-    `<div class="r-row"><span>${debt.description||'Nasiya'}</span><span style="color:#dc2626">${fmt(debt.remaining)}</span></div>`
+    `<div class="r-row">
+      <span>${debt.description||'Qarz'}</span>
+      <span style="color:${debt.remaining>0?'#dc2626':'#16a34a'};font-weight:600">${fmt(debt.remaining)}</span>
+    </div>`
   ).join('');
-  const html = `
-  <div class="receipt-paper">
+  const html = `<div class="receipt-paper">
     <div class="r-title">PossKassa — Nasiya Hisobi</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Mijoz:</span><span><b>${d.full_name}</b></span></div>
     <div class="r-row"><span>Tel:</span><span>${d.phone||'—'}</span></div>
     <div class="r-row"><span>Manzil:</span><span>${d.address||'—'}</span></div>
     <div class="r-divider"></div>
-    ${rows || '<div style="text-align:center">Qarz yo\'q</div>'}
+    ${rows || '<div style="text-align:center;color:#94a3b8">Qarz yo\'q</div>'}
     <div class="r-divider"></div>
     <div class="r-row r-total"><span>JAMI QARZ:</span><span style="color:#dc2626">${fmt(d.total_debt)}</span></div>
     <div class="r-divider"></div>
     <div style="text-align:center;font-size:11px">Sana: ${new Date().toLocaleDateString('uz-UZ')}</div>
   </div>`;
-  document.getElementById('debtor-detail-modal')?.remove();
   showPrintModal(html, `${d.full_name} — Nasiya Hisobi`);
 }
+
+// ── Nasiya to'lov cheki ───────────────────────────────────────
+function printDebtPayReceipt(res) {
+  if (!res || !res.debt) return;
+  const debt   = res.debt   || {};
+  const debtor = res.debtor || {};
+  const html = `<div class="receipt-paper">
+    <div class="r-title">PossKassa — Nasiya To'lov</div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Chek:</span><span>${res.receipt_number||''}</span></div>
+    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Mijoz:</span><span><b>${debtor.full_name||'—'}</b></span></div>
+    <div class="r-row"><span>Tel:</span><span>${debtor.phone||'—'}</span></div>
+    <div class="r-divider"></div>
+    <div class="r-row r-total"><span>TO'LANDI:</span><span style="color:#16a34a">+${fmt(res.paid||0)}</span></div>
+    <div class="r-row"><span>Qoldiq:</span><span style="color:#dc2626">${fmt(debt.remaining||0)}</span></div>
+    <div class="r-divider"></div>
+    <div style="text-align:center">${res.message||''}</div>
+    <div style="text-align:center;margin-top:6px">Rahmat! 🙏</div>
+  </div>`;
+  showPrintModal(html, "Nasiya To'lov Cheki");
+}
+
 
 // Chekni ekranda ko'rsatish va chop etish
 function showPrintModal(html, title) {
