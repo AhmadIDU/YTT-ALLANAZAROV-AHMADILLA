@@ -150,7 +150,9 @@ input:focus,select:focus{border-color:#2563eb}
 </div>
 <div class="toast" id="toast"></div>
 <div id="print-receipt"></div>
+
 <script>
+
 const API = `http://localhost:${location.port||3500}/api/v1`;
 const fmt = n => new Intl.NumberFormat('uz-UZ').format(Math.round(n)) + " so'm";
 const pct = n => parseFloat(n).toFixed(1) + '%';
@@ -188,12 +190,14 @@ function show(page) {
 // ═══════════════════ DASHBOARD ═══════════════════
 async function dashboard() {
   const el = document.getElementById('main-content');
-  el.innerHTML = '<p style="color:#94a3b8;padding:20px">Yuklanmoqda...</p>';
-  const [dash, top] = await Promise.all([
-    api('GET','/dashboard'),
-    api('GET','/reports/top-products')
-  ]);
-  const t = dash.today || {};
+  el.innerHTML = '<p style="color:#94a3b8;padding:40px;text-align:center;font-size:16px">⏳ Yuklanmoqda...</p>';
+  try {
+    const [dash, top] = await Promise.all([
+      api('GET','/dashboard'),
+      api('GET','/reports/top-products')
+    ]);
+    if (dash.error) throw new Error('API xato: ' + dash.error);
+    const t = dash.today || {};
   const payBreak = (dash.payment_breakdown||[]).map(p =>
     `<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #f1f5f9">
       <span style="color:#64748b;text-transform:capitalize">${p.method}</span>
@@ -240,6 +244,21 @@ async function dashboard() {
     document.getElementById('prod-count').textContent = (d||[]).length;
   });
 }
+  } catch(err) {
+    document.getElementById('main-content').innerHTML = `
+      <div style='text-align:center;padding:60px 20px'>
+        <div style='font-size:48px;margin-bottom:16px'>⚠️</div>
+        <h2 style='color:#dc2626;margin-bottom:8px'>Server bilan bog'lanishda xato</h2>
+        <p style='color:#64748b;margin-bottom:20px'>Server ishlamayapti yoki port noto'g'ri</p>
+        <div style='background:#f1f5f9;border-radius:10px;padding:16px;display:inline-block;text-align:left;font-family:monospace;font-size:13px'>
+          <div>✅ Terminalni tekshiring:</div>
+          <div style='color:#2563eb;margin-top:8px'>python server.py 3500</div>
+          <div style='color:#64748b;margin-top:4px'>http://localhost:3500</div>
+        </div><br><br>
+        <button onclick='dashboard()' style='padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px'>🔄 Qayta urinish</button>
+      </div>`;
+    console.error('Dashboard xato:', err);
+  }
 
 // ═══════════════════ POS TERMINAL ═══════════════════
 async function pos() {
@@ -1486,13 +1505,9 @@ async function saveNasiyaFromPos(total) {
     message: `Nasiya: ${fmt(total)}`
   });
 }
-</script>
-</body>
-</html>
 
 
-<!-- FERMALAR VA BARCHA QARZNI BIRDANIGA YOPISH -->
-<script>
+
 // filterFarms
 function filterFarms(q) {
   const list = window._farmsList||[];
@@ -1764,10 +1779,9 @@ async function processFarmDebtPay(debtId) {
   printFarmPayReceipt(res);
   farms();
 }
-</script>
 
 
-<script>
+
 // ══════════════════════════════════════════════════════
 // 💰 BARCHA QARZNI BIRDANIGA YOPISH (steering request)
 // ══════════════════════════════════════════════════════
@@ -2093,4 +2107,10 @@ async function printFarmCard(fid) {
   document.getElementById('farm-detail-modal')?.remove();
   showPrintModal(html, `${f.name} — Ferma Hisobi`);
 }
+
 </script>
+</body>
+</html>
+
+<!-- FERMALAR VA BARCHA QARZNI BIRDANIGA YOPISH -->
+
