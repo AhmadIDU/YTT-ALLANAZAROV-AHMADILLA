@@ -421,8 +421,8 @@ def _seed_mysql(c, conn):
             (f2,"Yashil Vodiy FX","Rahimov Akbar","+998912223344","Farg'ona","Farg'ona","sabzavot",150000,970000),
         ]:
             c.execute(
-                "INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,notes,is_active,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)",
-                (fid,name,owner,phone,addr,region,ftype,debt,supplied,now))
+                "INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,notes,is_active,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (fid,name,owner,phone,addr,region,ftype,debt,supplied,"",1,now))
 
     c.execute("SELECT COUNT(*) as cnt FROM debtors")
     if (lambda r: r['cnt'] if isinstance(r,dict) else r[0])(c.fetchone()) == 0:
