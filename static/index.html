@@ -134,8 +134,13 @@ input:focus,select:focus{border-color:#2563eb}
    <button class="nav-btn" onclick="show('intake')">🚛 Tovar qabuli</button>
    <button class="nav-btn" onclick="show('reports')">📈 Hisobotlar</button>
    <button class="nav-btn" onclick="show('sales')">🧾 Sotuvlar</button>
-   <button class="nav-btn" onclick="show('settings')">⚙️ Sozlamalar</button>
   </nav>
+  <!-- Pastki tugmalar -->
+  <div style="padding:8px;border-top:1px solid #1e293b;margin-top:auto">
+   <button class="nav-btn" onclick="show('settings')" style="width:100%;gap:8px">
+     ⚙️ Sozlamalar
+   </button>
+  </div>
  </aside>
  <!-- Main -->
  <div class="main">
@@ -1188,19 +1193,36 @@ async function checkServerStatus() {
 // ── Ma'lumotlarni tozalash ────────────────────────────────────
 async function clearSalesData() {
   if (!confirm('Barcha sotuvlar o\'chirilsinmi?\nBu amalni bekor qilib bo\'lmaydi!')) return;
-  // API orqali o'chirish (hozircha xabar)
-  toast('⚠️ Bu funksiya tez orada qo\'shiladi', 'err');
+  const res = await api('DELETE', '/sales/all');
+  if (res && !res.error) {
+    toast('✅ Barcha sotuvlar o\'chirildi!');
+    show('settings');
+  } else {
+    toast(res?.error || 'Xato', 'err');
+  }
 }
 
 async function clearDebtsData() {
   if (!confirm('Barcha qarzlar o\'chirilsinmi?\nBu amalni bekor qilib bo\'lmaydi!')) return;
-  toast('⚠️ Bu funksiya tez orada qo\'shiladi', 'err');
+  const res = await api('DELETE', '/debts/all');
+  if (res && !res.error) {
+    toast('✅ Barcha qarzlar o\'chirildi!');
+    show('settings');
+  } else {
+    toast(res?.error || 'Xato', 'err');
+  }
 }
 
 async function clearAllData() {
   if (!confirm('⚠️ BARCHA MA\'LUMOTLAR O\'CHIRILADI!\n\nDavom etasizmi?')) return;
-  if (!confirm('Ishonchingiz komilmi? Bu amalni bekor qilib bo\'lmaydi!')) return;
-  toast('⚠️ Bu funksiya tez orada qo\'shiladi', 'err');
+  if (!confirm('Ishonchingiz komilmi?\nBu amalni bekor qilib bo\'lmaydi!')) return;
+  const res = await api('DELETE', '/data/all');
+  if (res && !res.error) {
+    toast('✅ Barcha ma\'lumotlar o\'chirildi!');
+    show('settings');
+  } else {
+    toast(res?.error || 'Xato', 'err');
+  }
 }
 
 // ── Chekda do'kon nomini ishlatish ────────────────────────────

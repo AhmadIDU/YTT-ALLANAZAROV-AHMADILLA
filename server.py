@@ -1356,6 +1356,34 @@ def handle_api(method, path, body, params):
 # ══════════════════════════════════════════════════════════════
 # 4. Main
 # ══════════════════════════════════════════════════════════════
+
+    # ── Ma'lumotlarni tozalash (Sozlamalar) ───────────────────
+    if res == "sales" and method == "DELETE" and len(parts) == 4 and parts[3] == "all":
+        conn = _db()
+        conn.execute("DELETE FROM sale_items")
+        conn.execute("DELETE FROM sales")
+        conn.commit(); conn.close()
+        return _ok({"message": "Barcha sotuvlar o'chirildi", "deleted": True})
+
+    if res == "debts" and method == "DELETE" and len(parts) == 4 and parts[3] == "all":
+        conn = _db()
+        conn.execute("DELETE FROM debt_payments")
+        conn.execute("DELETE FROM debts")
+        conn.execute("UPDATE debtors SET total_debt=0")
+        conn.commit(); conn.close()
+        return _ok({"message": "Barcha qarzlar o'chirildi", "deleted": True})
+
+    if res == "data" and method == "DELETE" and len(parts) == 4 and parts[3] == "all":
+        conn = _db()
+        for tbl in ["sale_items","sales","debt_payments","debts",
+                    "farm_supply_items","farm_supplies","farm_payments",
+                    "farm_debts","intake_drafts"]:
+            conn.execute(f"DELETE FROM {tbl}")
+        conn.execute("UPDATE debtors SET total_debt=0")
+        conn.execute("UPDATE farms SET total_debt=0, total_supplied=0")
+        conn.commit(); conn.close()
+        return _ok({"message": "Barcha ma'lumotlar o'chirildi", "deleted": True})
+
     return _err(f"'{path}' topilmadi", 404)
 
 
