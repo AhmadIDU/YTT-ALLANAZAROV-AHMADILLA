@@ -153,7 +153,21 @@ input:focus,select:focus{border-color:#2563eb}
 
 <script>
 
+// Global xato ushlash
+window.onerror = function(msg, src, line, col, err) {
+  document.getElementById('main-content').innerHTML = `
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:20px;margin:20px;font-family:monospace">
+      <h3 style="color:#dc2626;margin-bottom:8px">❌ JavaScript Xato</h3>
+      <div><b>Xato:</b> ${msg}</div>
+      <div><b>Fayl:</b> ${src}</div>
+      <div><b>Qator:</b> ${line}:${col}</div>
+      <div style="margin-top:8px"><b>F12 → Console</b> da batafsil ko'ring</div>
+    </div>`;
+  return false;
+};
+
 const API = `http://localhost:${location.port||3500}/api/v1`;
+console.log('🔌 API URL:', API);
 const fmt = n => new Intl.NumberFormat('uz-UZ').format(Math.round(n)) + " so'm";
 const pct = n => parseFloat(n).toFixed(1) + '%';
 let cart = [], allProducts = [];
