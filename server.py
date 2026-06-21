@@ -28,9 +28,9 @@ STATIC  = os.path.join(os.path.dirname(__file__), "static")
 DB_CONFIG = {
     "host":     "127.0.0.1",
     "port":     3306,
-    "user":     "root",
-    "password": "",        # ← MySQL parolingiz
-    "database": "ytt",     # ← phpMyAdmin da ko'ringan DB nomi
+    "user":     "user",
+    "password": "",        # ← parolingiz (bo'sh bo'lsa bo'sh qoldiring)
+    "database": "ytt",
     "charset":  "utf8mb4",
 }
 
