@@ -705,7 +705,7 @@ def handle_api(method, path, body, params):
             results = []
             for s in body.get("sales", []):
                 sid = str(uuid.uuid4())
-                conn.execute("INSERT OR IGNORE INTO sales VALUES (?,?,?,?,?,?,?)",
+                conn.execute(("INSERT IGNORE" if DB_MODE=="mysql" else "INSERT OR IGNORE") + " INTO sales VALUES (?,?,?,?,?,?,?)",
                     (sid, _receipt(), "Kassir", s.get("total_amount",0), "cash", "synced", s.get("sale_time",_now())))
                 conn.commit()
                 results.append({"local_id": s.get("local_id",""), "remote_id": sid,
@@ -743,7 +743,7 @@ def handle_api(method, path, body, params):
                        COALESCE(AVG(total_amount),0) as avg_check
                 FROM sales""").fetchone()
             by_day = _rows(conn.execute("""
-                SELECT substr(sale_time,1,10) as period, COUNT(*) as sales_count,
+                SELECT SUBSTRING(sale_time,1,10) as period, COUNT(*) as sales_count,
                        SUM(total_amount) as revenue, AVG(total_amount) as avg_check
                 FROM sales GROUP BY period ORDER BY period DESC LIMIT 30"""))
             conn.close()
@@ -929,7 +929,7 @@ def handle_api(method, path, body, params):
                     for r in rows:
                         if not r.get("approved",True): continue
                         pid = str(uuid.uuid4())
-                        conn.execute("INSERT OR IGNORE INTO products VALUES (?,?,?,?,?,?,?,1,?)",
+                        conn.execute(("INSERT IGNORE" if DB_MODE=="mysql" else "INSERT OR IGNORE") + " INTO products VALUES (?,?,?,?,?,?,?,1,?)",
                             (pid, r.get("name",""), r.get("barcode",""), r.get("unit","pcs"),
                              round(r.get("unit_cost",0)*1.3,0), r.get("unit_cost",0),
                              r.get("qty",0), _now()))

@@ -813,6 +813,13 @@ function updateTotal() {
 }
 
 // Barchasini belgilash / olib tashlash
+function toggleRow(i) {
+  const el  = document.getElementById(`row-${i}`);
+  const chk = document.getElementById(`chk-${i}`);
+  if (el && chk) el.style.opacity = chk.checked ? '1' : '0.4';
+  updateTotal();
+}
+
 function checkAll(state) {
   const rows = window._draftRows || [];
   rows.forEach((_,i) => {
@@ -1032,62 +1039,178 @@ async function farms() {
 // ═══════════════════════════════════════════════════════
 async function debtors() {
   const el = document.getElementById('main-content');
-  const [dlist, stats] = await Promise.all([
+  el.innerHTML = '<p style="color:#94a3b8;padding:40px;text-align:center">⏳ Yuklanmoqda...</p>';
+
+  const [dlist, stats, allDebts] = await Promise.all([
     api('GET','/debtors'),
-    api('GET','/debt-stats')
+    api('GET','/debt-stats'),
+    api('GET','/debts?status=active'),
   ]);
 
-  const cards = (dlist||[]).map(d => {
-    const cls = d.total_debt > 200000 ? 'danger' : d.total_debt > 50000 ? 'warning' : 'ok';
-    return `
-    <div class="debt-card ${cls}" onclick="debtorDetail('${d.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="font-weight:700;font-size:14px">${d.full_name}</div>
-          <div style="font-size:12px;color:#64748b;margin-top:2px">📞 ${d.phone||'—'} &nbsp;|&nbsp; ${d.address||'—'}</div>
+  // Har bir qarzdor uchun qarzlarini debtors jadvaliga qo'shamiz
+  const debtsByDebtor = {};
+  (allDebts||[]).forEach(d => {
+    if (!debtsByDebtor[d.debtor_id]) debtsByDebtor[d.debtor_id] = [];
+    debtsByDebtor[d.debtor_id].push(d);
+  });
+
+  // Kengaytirilgan jadval satrlari — har bir qarz alohida qator
+  const tableRows = (dlist||[]).map(d => {
+    const myDebts = debtsByDebtor[d.id] || [];
+    const cls = d.total_debt > 200000 ? '#fee2e2' : d.total_debt > 50000 ? '#fef9c3' : '#f0fdf4';
+
+    if (myDebts.length === 0) {
+      // Qarzi yo'q
+      return `
+      <tr style="background:${cls}">
+        <td style="font-weight:600">${d.full_name}</td>
+        <td style="color:#64748b">${d.phone||'—'}</td>
+        <td style="color:#64748b">${d.address||'—'}</td>
+        <td>—</td>
+        <td style="text-align:right;color:#16a34a;font-weight:600">0 so'm</td>
+        <td style="text-align:right;color:#16a34a">0 so'm</td>
+        <td>
+          <button class="btn btn-blue" style="padding:4px 10px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+ Qarz</button>
+        </td>
+      </tr>`;
+    }
+
+    // Har bir qarz uchun qator
+    return myDebts.map((debt, idx) => `
+    <tr style="background:${cls}">
+      ${idx===0 ? `<td rowspan="${myDebts.length}" style="font-weight:700;vertical-align:top;padding-top:10px">
+        ${d.full_name}
+        <div style="font-size:11px;color:#64748b;font-weight:400">${d.phone||'—'}</div>
+        <div style="font-size:11px;color:#64748b">${d.address||'—'}</div>
+      </td>` : ''}
+      <td style="color:#64748b;font-size:12px">${debt.description||'Nasiya'}</td>
+      <td style="text-align:right;font-weight:600">${fmt(debt.amount)}</td>
+      <td style="text-align:right;color:${debt.remaining>0?'#dc2626':'#16a34a'};font-weight:700">${fmt(debt.remaining)}</td>
+      <td style="text-align:center">
+        <div class="progress-bar" style="width:80px;display:inline-block">
+          <div class="progress-fill" style="width:${debt.amount>0?Math.round(debt.paid_amount/debt.amount*100):0}%"></div>
         </div>
-        <span class="badge ${d.total_debt>0?'badge-red':'badge-green'}">${d.debt_count||0} ta qarz</span>
-      </div>
-      <div class="debt-amount ${d.total_debt<=0?'paid':''}">${fmt(d.total_debt)}</div>
-      ${d.notes?`<div style="font-size:11px;color:#94a3b8;margin-top:4px">📝 ${d.notes}</div>`:''}
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn btn-blue" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();addDebtModal('${d.id}','${d.full_name}')">+ Qarz</button>
-        <button class="btn btn-green" style="padding:5px 12px;font-size:12px" onclick="event.stopPropagation();debtorDetail('${d.id}')">Ko'rish</button>
-      </div>
-    </div>`;
+        <span style="font-size:10px;color:#64748b;margin-left:4px">${debt.amount>0?Math.round(debt.paid_amount/debt.amount*100):100}%</span>
+      </td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${debt.remaining > 0 ? `
+          <button class="btn btn-green" style="padding:3px 8px;font-size:11px"
+            onclick="quickPay('${debt.id}','${d.full_name}',${debt.remaining})">
+            💵 To'lash
+          </button>
+          <button class="btn btn-gray" style="padding:3px 8px;font-size:11px"
+            onclick="payDebtModal('${debt.id}','${d.full_name}',${debt.remaining})">
+            ⚙️
+          </button>` : '<span class="badge badge-green" style="font-size:10px">✅ Yopildi</span>'}
+          ${idx===0?`<button class="btn btn-blue" style="padding:3px 8px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+</button>`:''}
+        </div>
+      </td>
+    </tr>`).join('');
   }).join('');
 
   el.innerHTML = `
   <!-- Statistika -->
-  <div class="grid-4" style="margin-bottom:20px">
-    <div class="card"><h3>Jami qarzdorlar</h3><div class="val">${stats.total_debtors||0}</div><div class="sub">nafar</div></div>
+  <div class="grid-4" style="margin-bottom:16px">
+    <div class="card"><h3>Qarzdorlar</h3><div class="val">${(dlist||[]).length}</div></div>
     <div class="card"><h3>Umumiy qarz</h3><div class="val" style="color:#dc2626">${fmt(stats.total_debt_amount||0)}</div></div>
-    <div class="card"><h3>Faol qarzlar</h3><div class="val" style="color:#f59e0b">${stats.active_debts||0}</div><div class="sub">ta</div></div>
-    <div class="card"><h3>Yig'ilgan pul</h3><div class="val" style="color:#16a34a">${fmt(stats.total_collected||0)}</div></div>
+    <div class="card"><h3>Faol qarzlar</h3><div class="val" style="color:#f59e0b">${stats.active_debts||0} ta</div></div>
+    <div class="card"><h3>Yig'ilgan</h3><div class="val" style="color:#16a34a">${fmt(stats.total_collected||0)}</div></div>
   </div>
 
   <!-- Amallar -->
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div class="search-box" style="max-width:320px;flex:1">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div class="search-box" style="max-width:300px;flex:1">
       <span class="search-icon">🔍</span>
-      <input placeholder="Ism yoki telefon..." oninput="filterDebtors(this.value)" id="debtor-search">
+      <input id="debtor-search" placeholder="Ism yoki telefon..." oninput="filterDebtors(this.value)">
     </div>
-    <button class="btn btn-blue" onclick="addDebtorModal()">➕ Yangi qarzdor</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-gray" onclick="debtors()" style="font-size:12px">🔄 Yangilash</button>
+      <button class="btn btn-blue" onclick="addDebtorModal()">➕ Yangi qarzdor</button>
+    </div>
   </div>
 
-  <!-- Kartalar -->
-  <div id="debtors-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
-    ${cards||'<div style="color:#94a3b8;text-align:center;padding:40px;grid-column:1/-1">Qarzdorlar yo\'q</div>'}
+  <!-- Barcha qarzlar jadval ko'rinishida -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="tbl" id="debtors-table">
+      <thead>
+        <tr>
+          <th>Ism</th>
+          <th>Tavsif</th>
+          <th style="text-align:right">Jami</th>
+          <th style="text-align:right">Qoldiq</th>
+          <th style="text-align:center">To'lov %</th>
+          <th>Amal</th>
+        </tr>
+      </thead>
+      <tbody id="debtors-tbody">
+        ${tableRows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Qarzdorlar yo\'q</td></tr>'}
+      </tbody>
+    </table>
   </div>`;
 
   window._debtorsList = dlist;
+  window._allDebtsList = allDebts||[];
+}
+
+// ── Tez to'lash (1 bosish, modal yo'q) ────────────────────────────
+async function quickPay(debtId, name, remaining) {
+  if (!confirm(`${name}\n\nQoldiq: ${fmt(remaining)}\n\nTo'liq to'lansinmi?`)) return;
+  const res = await api('POST', `/debts/${debtId}/pay`, {
+    amount: remaining,
+    payment_method: 'cash',
+    note: 'Tez to\'lov'
+  });
+  toast(`✅ ${res.message || fmt(remaining) + ' to\'landi!'}`);
+  printDebtPayReceipt(res);
+  debtors();
 }
 
 function filterDebtors(q) {
-  const filtered = q ? (window._debtorsList||[]).filter(d =>
-    d.full_name.toLowerCase().includes(q.toLowerCase()) ||
-    (d.phone||'').includes(q)
-  ) : window._debtorsList||[];
+  const filtered = q
+    ? (window._debtorsList||[]).filter(d =>
+        d.full_name.toLowerCase().includes(q.toLowerCase()) ||
+        (d.phone||'').includes(q))
+    : window._debtorsList||[];
+
+  const debtsByDebtor = {};
+  (window._allDebtsList||[]).forEach(d => {
+    if (!debtsByDebtor[d.debtor_id]) debtsByDebtor[d.debtor_id] = [];
+    debtsByDebtor[d.debtor_id].push(d);
+  });
+
+  const tbody = document.getElementById('debtors-tbody');
+  if (!tbody) return;
+
+  const rows = filtered.map(d => {
+    const myDebts = debtsByDebtor[d.id] || [];
+    const cls = d.total_debt > 200000 ? '#fee2e2' : d.total_debt > 50000 ? '#fef9c3' : '#f0fdf4';
+    if (myDebts.length === 0) {
+      return `<tr style="background:${cls}">
+        <td style="font-weight:600">${d.full_name}<br><span style="font-size:11px;color:#64748b">${d.phone||'—'}</span></td>
+        <td>—</td><td style="text-align:right">0</td>
+        <td style="text-align:right;color:#16a34a;font-weight:600">0 so'm</td>
+        <td style="text-align:center">100%</td>
+        <td><button class="btn btn-blue" style="padding:3px 8px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+ Qarz</button></td>
+      </tr>`;
+    }
+    return myDebts.map((debt,idx) => `
+    <tr style="background:${cls}">
+      ${idx===0?`<td rowspan="${myDebts.length}" style="font-weight:700;vertical-align:top">
+        ${d.full_name}<div style="font-size:11px;color:#64748b">${d.phone||'—'}</div></td>`:''}
+      <td style="color:#64748b;font-size:12px">${debt.description||'Nasiya'}</td>
+      <td style="text-align:right">${fmt(debt.amount)}</td>
+      <td style="text-align:right;color:${debt.remaining>0?'#dc2626':'#16a34a'};font-weight:700">${fmt(debt.remaining)}</td>
+      <td style="text-align:center;font-size:11px">${debt.amount>0?Math.round(debt.paid_amount/debt.amount*100):100}%</td>
+      <td>${debt.remaining>0?`
+        <button class="btn btn-green" style="padding:3px 8px;font-size:11px" onclick="quickPay('${debt.id}','${d.full_name}',${debt.remaining})">💵 To'lash</button>
+        ${idx===0?`<button class="btn btn-blue" style="padding:3px 8px;font-size:11px" onclick="addDebtModal('${d.id}','${d.full_name}')">+</button>`:''}
+      `:'<span class="badge badge-green" style="font-size:10px">✅</span>'}</td>
+    </tr>`).join('');
+  }).join('');
+
+  tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">Topilmadi</td></tr>';
+}
 
   document.getElementById('debtors-grid').innerHTML = filtered.map(d => {
     const cls = d.total_debt > 200000 ? 'danger' : d.total_debt > 50000 ? 'warning' : 'ok';
