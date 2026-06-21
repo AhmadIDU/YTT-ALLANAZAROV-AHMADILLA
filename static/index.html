@@ -212,67 +212,70 @@ async function dashboard() {
     ]);
     if (dash.error) throw new Error('API xato: ' + dash.error);
     const t = dash.today || {};
-  const payBreak = (dash.payment_breakdown||[]).map(p =>
-    `<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #f1f5f9">
-      <span style="color:#64748b;text-transform:capitalize">${p.method}</span>
-      <span style="font-weight:600">${fmt(p.total||0)}</span>
-    </div>`
-  ).join('');
 
-  const topRows = (top||[]).slice(0,8).map((p,i) => `
-    <tr>
-      <td><span style="color:#94a3b8">${i+1}</span></td>
-      <td style="font-weight:500">${p.product_name||'-'}</td>
-      <td style="text-align:right">${(p.total_qty||0).toFixed(1)}</td>
-      <td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.total_revenue||0)}</td>
-    </tr>`).join('');
+    const payBreak = (dash.payment_breakdown||[]).map(p =>
+      `<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #f1f5f9">
+        <span style="color:#64748b;text-transform:capitalize">${p.method}</span>
+        <span style="font-weight:600">${fmt(p.total||0)}</span>
+      </div>`
+    ).join('');
 
-  const maxRev = Math.max(...(top||[]).map(p=>p.total_revenue||0), 1);
-  const bars = (top||[]).slice(0,10).map(p => {
-    const h = Math.max(6, (p.total_revenue/maxRev)*100);
-    return `<div class="bar" style="height:${h}%" title="${p.product_name}: ${fmt(p.total_revenue||0)}"></div>`;
-  }).join('');
+    const topRows = (top||[]).slice(0,8).map((p,i) => `
+      <tr>
+        <td><span style="color:#94a3b8">${i+1}</span></td>
+        <td style="font-weight:500">${p.product_name||'-'}</td>
+        <td style="text-align:right">${(p.total_qty||0).toFixed(1)}</td>
+        <td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.total_revenue||0)}</td>
+      </tr>`).join('');
 
-  el.innerHTML = `
-  <div class="grid-4">
-    <div class="card"><h3>Bugungi sotuvlar</h3><div class="val">${t.sales_count||0}</div><div class="sub">ta sotuv</div></div>
-    <div class="card"><h3>Bugungi daromad</h3><div class="val" style="color:#15803d">${fmt(t.revenue||0)}</div></div>
-    <div class="card"><h3>O'rtacha chek</h3><div class="val" style="color:#7c3aed">${fmt(t.avg_check||0)}</div></div>
-    <div class="card"><h3>Mahsulot turi</h3><div class="val" style="color:#d97706" id="prod-count">-</div></div>
-  </div>
-  <div class="grid-2">
-    <div class="card">
-      <h3>Top mahsulotlar (daromad)</h3>
-      <div class="bar-chart">${bars}</div>
-      <table class="tbl" style="margin-top:12px">
-        <thead><tr><th>#</th><th>Mahsulot</th><th style="text-align:right">Miqdor</th><th style="text-align:right">Daromad</th></tr></thead>
-        <tbody>${topRows}</tbody>
-      </table>
+    const maxRev = Math.max(...(top||[]).map(p=>p.total_revenue||0), 1);
+    const bars = (top||[]).slice(0,10).map(p => {
+      const h = Math.max(6, (p.total_revenue/maxRev)*100);
+      return `<div class="bar" style="height:${h}%" title="${p.product_name}: ${fmt(p.total_revenue||0)}"></div>`;
+    }).join('');
+
+    el.innerHTML = `
+    <div class="grid-4">
+      <div class="card"><h3>Bugungi sotuvlar</h3><div class="val">${t.sales_count||0}</div><div class="sub">ta sotuv</div></div>
+      <div class="card"><h3>Bugungi daromad</h3><div class="val" style="color:#15803d">${fmt(t.revenue||0)}</div></div>
+      <div class="card"><h3>O'rtacha chek</h3><div class="val" style="color:#7c3aed">${fmt(t.avg_check||0)}</div></div>
+      <div class="card"><h3>Mahsulot turi</h3><div class="val" style="color:#d97706" id="prod-count">-</div></div>
     </div>
-    <div class="card">
-      <h3>To'lov usullari</h3>
-      <div style="margin-top:8px">${payBreak || '<p style="color:#94a3b8;text-align:center;padding:20px">Sotuv yo\'q</p>'}</div>
-    </div>
-  </div>`;
-  api('GET','/products').then(d => {
-    document.getElementById('prod-count').textContent = (d||[]).length;
-  });
-}
+    <div class="grid-2">
+      <div class="card">
+        <h3>Top mahsulotlar (daromad)</h3>
+        <div class="bar-chart">${bars}</div>
+        <table class="tbl" style="margin-top:12px">
+          <thead><tr><th>#</th><th>Mahsulot</th><th style="text-align:right">Miqdor</th><th style="text-align:right">Daromad</th></tr></thead>
+          <tbody>${topRows}</tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>To'lov usullari</h3>
+        <div style="margin-top:8px">${payBreak || '<p style="color:#94a3b8;text-align:center;padding:20px">Sotuv yo\'q</p>'}</div>
+      </div>
+    </div>`;
+
+    api('GET','/products').then(d => {
+      document.getElementById('prod-count').textContent = (d||[]).length;
+    });
+
   } catch(err) {
-    document.getElementById('main-content').innerHTML = `
-      <div style='text-align:center;padding:60px 20px'>
-        <div style='font-size:48px;margin-bottom:16px'>⚠️</div>
-        <h2 style='color:#dc2626;margin-bottom:8px'>Server bilan bog'lanishda xato</h2>
-        <p style='color:#64748b;margin-bottom:20px'>Server ishlamayapti yoki port noto'g'ri</p>
-        <div style='background:#f1f5f9;border-radius:10px;padding:16px;display:inline-block;text-align:left;font-family:monospace;font-size:13px'>
+    el.innerHTML = `
+      <div style="text-align:center;padding:60px 20px">
+        <div style="font-size:48px;margin-bottom:16px">⚠️</div>
+        <h2 style="color:#dc2626;margin-bottom:8px">Server bilan bog'lanishda xato</h2>
+        <p style="color:#64748b;margin-bottom:20px">Server ishlamayapti yoki port noto'g'ri</p>
+        <div style="background:#f1f5f9;border-radius:10px;padding:16px;display:inline-block;text-align:left;font-family:monospace;font-size:13px">
           <div>✅ Terminalni tekshiring:</div>
-          <div style='color:#2563eb;margin-top:8px'>python server.py 3500</div>
-          <div style='color:#64748b;margin-top:4px'>http://localhost:3500</div>
+          <div style="color:#2563eb;margin-top:8px">py -3.14 server.py 3500 mysql</div>
+          <div style="color:#64748b;margin-top:4px">http://localhost:3500</div>
         </div><br><br>
-        <button onclick='dashboard()' style='padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px'>🔄 Qayta urinish</button>
+        <button onclick="dashboard()" class="btn btn-blue">🔄 Qayta urinish</button>
       </div>`;
     console.error('Dashboard xato:', err);
   }
+}
 
 // ═══════════════════ POS TERMINAL ═══════════════════
 async function pos() {
