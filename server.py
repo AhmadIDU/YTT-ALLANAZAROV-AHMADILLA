@@ -1,15 +1,15 @@
 """
-PossKassa — Standalone Demo Server
-Faqat Python stdlib: http.server, sqlite3, json, uuid, datetime
-Hech qanday pip paketi kerak emas!
+PossKassa — Standalone Server
+MySQL (phpMyAdmin) yoki SQLite bilan ishlaydi
 
-Ishga tushirish: python3 server.py
-API:  http://localhost:8000/api/v1/...
-UI:   http://localhost:8000/
+Ishga tushirish:
+  SQLite:  python server.py 3500
+  MySQL:   python server.py 3500 mysql
+
+MySQL sozlash: server.py da DB_CONFIG ni to'ldiring
 """
 import http.server
 import socketserver
-import sqlite3
 import json
 import uuid
 import os
@@ -19,261 +19,432 @@ from datetime import datetime, timezone
 
 import sys
 PORT    = int(sys.argv[1]) if len(sys.argv) > 1 else 3500
-DB_PATH = os.path.join(os.path.dirname(__file__), "posskassa.db")
+DB_MODE = sys.argv[2] if len(sys.argv) > 2 else "sqlite"  # "sqlite" yoki "mysql"
 STATIC  = os.path.join(os.path.dirname(__file__), "static")
+
+# ══════════════════════════════════════════════════════════════
+# MySQL sozlamalari — shu yerni to'ldiring!
+# ══════════════════════════════════════════════════════════════
+DB_CONFIG = {
+    "host":     "127.0.0.1",
+    "port":     3306,
+    "user":     "root",
+    "password": "",        # ← MySQL parolingiz
+    "database": "ytt",     # ← phpMyAdmin da ko'ringan DB nomi
+    "charset":  "utf8mb4",
+}
+
+# SQLite (zaxira)
+DB_PATH = os.path.join(os.path.dirname(__file__), "posskassa.db")
+
 
 # ══════════════════════════════════════════════════════════════
 # 1. Ma'lumotlar bazasi
 # ══════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════
+# DB ulanish — MySQL yoki SQLite (wrapper)
+# ══════════════════════════════════════════════════════════════
+def _db():
+    """MySQL yoki SQLite — bir xil interfeys"""
+    if DB_MODE == "mysql":
+        import mysql.connector
+        conn = mysql.connector.connect(**DB_CONFIG)
+        return _MySQLWrapper(conn)
+    else:
+        import sqlite3
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+
+def _rows(cursor):
+    return [dict(r) for r in cursor.fetchall()]
+
+
+class _MySQLWrapper:
+    """MySQL ni SQLite interfeysi bilan ishlatatuvchi wrapper"""
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        mysql_sql = sql.replace("?", "%s")
+        c = self._conn.cursor(dictionary=True)
+        c.execute(mysql_sql, params if params else ())
+        return _MySQLCursor(c)
+
+    def commit(self):   self._conn.commit()
+    def close(self):    self._conn.close()
+    def __enter__(self): return self
+    def __exit__(self, *a): self.close()
+
+
+class _MySQLCursor:
+    def __init__(self, c): self._c = c
+    def fetchone(self):
+        r = self._c.fetchone()
+        return _DictRow(r) if r else None
+    def fetchall(self):
+        return [_DictRow(r) for r in self._c.fetchall()]
+    def __iter__(self):
+        return iter(self.fetchall())
+    @property
+    def lastrowid(self): return self._c.lastrowid
+
+
+class _DictRow(dict):
+    def __getitem__(self, k):
+        if isinstance(k, int): return list(self.values())[k]
+        return super().__getitem__(k)
+    def __getattr__(self, k):
+        try: return self[k]
+        except KeyError: raise AttributeError(k)
+    @property
+    def _mapping(self): return self
+
+# ══════════════════════════════════════════════════════════════
+# 1. Ma'lumotlar bazasini yaratish
+# ══════════════════════════════════════════════════════════════
+# ── Jadvallar SQL ──────────────────────────────────────────────
+_TABLES_SQLITE = """
+CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, barcode TEXT,
+    unit TEXT DEFAULT 'pcs', price REAL DEFAULT 0,
+    cost_price REAL DEFAULT 0, stock_qty REAL DEFAULT 0,
+    is_active INTEGER DEFAULT 1, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS sales (
+    id TEXT PRIMARY KEY, receipt_number TEXT,
+    cashier TEXT DEFAULT 'Kassir', total_amount REAL NOT NULL,
+    payment_method TEXT DEFAULT 'cash',
+    sync_status TEXT DEFAULT 'synced', sale_time TEXT
+);
+CREATE TABLE IF NOT EXISTS sale_items (
+    id TEXT PRIMARY KEY, sale_id TEXT, product_id TEXT,
+    product_name TEXT, quantity REAL, unit_price REAL, total_price REAL
+);
+CREATE TABLE IF NOT EXISTS intake_drafts (
+    id TEXT PRIMARY KEY, source TEXT,
+    status TEXT DEFAULT 'review_pending',
+    rows_json TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS debtors (
+    id TEXT PRIMARY KEY, full_name TEXT NOT NULL,
+    phone TEXT, address TEXT, total_debt REAL DEFAULT 0,
+    created_at TEXT, notes TEXT
+);
+CREATE TABLE IF NOT EXISTS debts (
+    id TEXT PRIMARY KEY, debtor_id TEXT NOT NULL,
+    sale_id TEXT, amount REAL NOT NULL,
+    paid_amount REAL DEFAULT 0, remaining REAL NOT NULL,
+    description TEXT, status TEXT DEFAULT 'active',
+    due_date TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS debt_payments (
+    id TEXT PRIMARY KEY, debt_id TEXT NOT NULL,
+    debtor_id TEXT NOT NULL, amount REAL NOT NULL,
+    payment_method TEXT DEFAULT 'cash', note TEXT, paid_at TEXT
+);
+CREATE TABLE IF NOT EXISTS farms (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL,
+    owner_name TEXT, phone TEXT, address TEXT, region TEXT,
+    farm_type TEXT DEFAULT 'general',
+    total_debt REAL DEFAULT 0, total_supplied REAL DEFAULT 0,
+    notes TEXT, is_active INTEGER DEFAULT 1, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS farm_debts (
+    id TEXT PRIMARY KEY, farm_id TEXT NOT NULL,
+    amount REAL NOT NULL, paid_amount REAL DEFAULT 0,
+    remaining REAL NOT NULL, description TEXT,
+    status TEXT DEFAULT 'active', due_date TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS farm_payments (
+    id TEXT PRIMARY KEY, farm_id TEXT NOT NULL,
+    farm_debt_id TEXT, amount REAL NOT NULL,
+    payment_method TEXT DEFAULT 'cash', note TEXT, paid_at TEXT
+);
+CREATE TABLE IF NOT EXISTS farm_supplies (
+    id TEXT PRIMARY KEY, farm_id TEXT NOT NULL,
+    supply_number TEXT, total_amount REAL DEFAULT 0,
+    payment_type TEXT DEFAULT 'cash', paid_amount REAL DEFAULT 0,
+    debt_amount REAL DEFAULT 0, notes TEXT,
+    supply_date TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS farm_supply_items (
+    id TEXT PRIMARY KEY, supply_id TEXT NOT NULL, farm_id TEXT NOT NULL,
+    product_name TEXT, quantity REAL, unit TEXT DEFAULT 'pcs',
+    unit_price REAL, total_price REAL
+);
+"""
+_TABLES_MYSQL = """
+CREATE TABLE IF NOT EXISTS products (
+    id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL,
+    barcode VARCHAR(100), unit VARCHAR(20) DEFAULT 'pcs',
+    price DECIMAL(15,2) DEFAULT 0, cost_price DECIMAL(15,2) DEFAULT 0,
+    stock_qty DECIMAL(15,3) DEFAULT 0, is_active TINYINT DEFAULT 1, created_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS sales (
+    id VARCHAR(36) PRIMARY KEY, receipt_number VARCHAR(50),
+    cashier VARCHAR(100) DEFAULT 'Kassir', total_amount DECIMAL(15,2) NOT NULL,
+    payment_method VARCHAR(20) DEFAULT 'cash',
+    sync_status VARCHAR(20) DEFAULT 'synced', sale_time VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS sale_items (
+    id VARCHAR(36) PRIMARY KEY, sale_id VARCHAR(36), product_id VARCHAR(36),
+    product_name VARCHAR(255), quantity DECIMAL(15,3),
+    unit_price DECIMAL(15,2), total_price DECIMAL(15,2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS intake_drafts (
+    id VARCHAR(36) PRIMARY KEY, source VARCHAR(20),
+    status VARCHAR(30) DEFAULT 'review_pending',
+    rows_json LONGTEXT, created_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS debtors (
+    id VARCHAR(36) PRIMARY KEY, full_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20), address VARCHAR(255), total_debt DECIMAL(15,2) DEFAULT 0,
+    created_at VARCHAR(50), notes TEXT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS debts (
+    id VARCHAR(36) PRIMARY KEY, debtor_id VARCHAR(36) NOT NULL,
+    sale_id VARCHAR(36), amount DECIMAL(15,2) NOT NULL,
+    paid_amount DECIMAL(15,2) DEFAULT 0, remaining DECIMAL(15,2) NOT NULL,
+    description VARCHAR(255), status VARCHAR(20) DEFAULT 'active',
+    due_date VARCHAR(20), created_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS debt_payments (
+    id VARCHAR(36) PRIMARY KEY, debt_id VARCHAR(36) NOT NULL,
+    debtor_id VARCHAR(36) NOT NULL, amount DECIMAL(15,2) NOT NULL,
+    payment_method VARCHAR(20) DEFAULT 'cash', note TEXT, paid_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS farms (
+    id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL,
+    owner_name VARCHAR(255), phone VARCHAR(20), address VARCHAR(255), region VARCHAR(100),
+    farm_type VARCHAR(50) DEFAULT 'general', total_debt DECIMAL(15,2) DEFAULT 0,
+    total_supplied DECIMAL(15,2) DEFAULT 0, notes TEXT,
+    is_active TINYINT DEFAULT 1, created_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS farm_debts (
+    id VARCHAR(36) PRIMARY KEY, farm_id VARCHAR(36) NOT NULL,
+    amount DECIMAL(15,2) NOT NULL, paid_amount DECIMAL(15,2) DEFAULT 0,
+    remaining DECIMAL(15,2) NOT NULL, description VARCHAR(255),
+    status VARCHAR(20) DEFAULT 'active', due_date VARCHAR(20), created_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS farm_payments (
+    id VARCHAR(36) PRIMARY KEY, farm_id VARCHAR(36) NOT NULL,
+    farm_debt_id VARCHAR(36), amount DECIMAL(15,2) NOT NULL,
+    payment_method VARCHAR(20) DEFAULT 'cash', note TEXT, paid_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS farm_supplies (
+    id VARCHAR(36) PRIMARY KEY, farm_id VARCHAR(36) NOT NULL,
+    supply_number VARCHAR(50), total_amount DECIMAL(15,2) DEFAULT 0,
+    payment_type VARCHAR(20) DEFAULT 'cash', paid_amount DECIMAL(15,2) DEFAULT 0,
+    debt_amount DECIMAL(15,2) DEFAULT 0, notes TEXT,
+    supply_date VARCHAR(50), created_at VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS farm_supply_items (
+    id VARCHAR(36) PRIMARY KEY, supply_id VARCHAR(36) NOT NULL,
+    farm_id VARCHAR(36) NOT NULL, product_name VARCHAR(255),
+    quantity DECIMAL(15,3), unit VARCHAR(20) DEFAULT 'pcs',
+    unit_price DECIMAL(15,2), total_price DECIMAL(15,2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+"""
+
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    if DB_MODE == "mysql":
+        _init_mysql()
+    else:
+        _init_sqlite()
+
+
+def _init_mysql():
+    import mysql.connector
+    conn = mysql.connector.connect(**DB_CONFIG)
     c = conn.cursor()
-    c.executescript("""
-    CREATE TABLE IF NOT EXISTS products (
-        id TEXT PRIMARY KEY, name TEXT NOT NULL, barcode TEXT,
-        unit TEXT DEFAULT 'pcs', price REAL DEFAULT 0,
-        cost_price REAL DEFAULT 0, stock_qty REAL DEFAULT 0,
-        is_active INTEGER DEFAULT 1, created_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS sales (
-        id TEXT PRIMARY KEY, receipt_number TEXT,
-        cashier TEXT DEFAULT 'Kassir', total_amount REAL NOT NULL,
-        payment_method TEXT DEFAULT 'cash',
-        sync_status TEXT DEFAULT 'synced', sale_time TEXT
-    );
-    CREATE TABLE IF NOT EXISTS sale_items (
-        id TEXT PRIMARY KEY, sale_id TEXT, product_id TEXT,
-        product_name TEXT, quantity REAL,
-        unit_price REAL, total_price REAL
-    );
-    CREATE TABLE IF NOT EXISTS intake_drafts (
-        id TEXT PRIMARY KEY, source TEXT,
-        status TEXT DEFAULT 'review_pending',
-        rows_json TEXT, created_at TEXT
-    );
-
-    -- ── NASIYA / QARZ MODULI ─────────────────────────────
-    CREATE TABLE IF NOT EXISTS debtors (
-        id TEXT PRIMARY KEY,
-        full_name TEXT NOT NULL,
-        phone TEXT,
-        address TEXT,
-        total_debt REAL DEFAULT 0,
-        created_at TEXT,
-        notes TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS debts (
-        id TEXT PRIMARY KEY,
-        debtor_id TEXT NOT NULL,
-        sale_id TEXT,
-        amount REAL NOT NULL,
-        paid_amount REAL DEFAULT 0,
-        remaining REAL NOT NULL,
-        description TEXT,
-        status TEXT DEFAULT 'active',
-        due_date TEXT,
-        created_at TEXT,
-        FOREIGN KEY(debtor_id) REFERENCES debtors(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS debt_payments (
-        id TEXT PRIMARY KEY,
-        debt_id TEXT NOT NULL,
-        debtor_id TEXT NOT NULL,
-        amount REAL NOT NULL,
-        payment_method TEXT DEFAULT 'cash',
-        note TEXT,
-        paid_at TEXT,
-        FOREIGN KEY(debt_id) REFERENCES debts(id)
-    );
-
-    -- ══════════════════════════════════════════════
-    -- FERMALAR MODULI
-    -- ══════════════════════════════════════════════
-    CREATE TABLE IF NOT EXISTS farms (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        owner_name TEXT,
-        phone TEXT,
-        address TEXT,
-        region TEXT,
-        farm_type TEXT DEFAULT 'general',
-        total_debt REAL DEFAULT 0,
-        total_supplied REAL DEFAULT 0,
-        notes TEXT,
-        is_active INTEGER DEFAULT 1,
-        created_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS farm_debts (
-        id TEXT PRIMARY KEY,
-        farm_id TEXT NOT NULL,
-        amount REAL NOT NULL,
-        paid_amount REAL DEFAULT 0,
-        remaining REAL NOT NULL,
-        description TEXT,
-        status TEXT DEFAULT 'active',
-        due_date TEXT,
-        created_at TEXT,
-        FOREIGN KEY(farm_id) REFERENCES farms(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS farm_payments (
-        id TEXT PRIMARY KEY,
-        farm_id TEXT NOT NULL,
-        farm_debt_id TEXT,
-        amount REAL NOT NULL,
-        payment_method TEXT DEFAULT 'cash',
-        note TEXT,
-        paid_at TEXT,
-        FOREIGN KEY(farm_id) REFERENCES farms(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS farm_supplies (
-        id TEXT PRIMARY KEY,
-        farm_id TEXT NOT NULL,
-        supply_number TEXT,
-        total_amount REAL DEFAULT 0,
-        payment_type TEXT DEFAULT 'cash',
-        paid_amount REAL DEFAULT 0,
-        debt_amount REAL DEFAULT 0,
-        notes TEXT,
-        supply_date TEXT,
-        created_at TEXT,
-        FOREIGN KEY(farm_id) REFERENCES farms(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS farm_supply_items (
-        id TEXT PRIMARY KEY,
-        supply_id TEXT NOT NULL,
-        farm_id TEXT NOT NULL,
-        product_name TEXT,
-        quantity REAL,
-        unit TEXT DEFAULT 'pcs',
-        unit_price REAL,
-        total_price REAL,
-        FOREIGN KEY(supply_id) REFERENCES farm_supplies(id)
-    );
-    """)
-
-    # Demo mahsulotlar — faqat bo'sh bo'lsa qo'shiladi
-    if c.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
-        now = _now()
-        for p in [
-            ("Non Obi 500g",         "4600001", "pcs",  3500,  2200, 120),
-            ("Sut 1L Nestle",         "4600002", "l",    9800,  7500,  45),
-            ("Shakar 1kg",            "4600003", "kg",  12000,  9000,  80),
-            ("Tuxum 10 dona",         "4600004", "pcs", 22000, 17000,  30),
-            ("Coca-Cola 0.5L",        "4600005", "pcs",  8500,  6000, 200),
-            ("Makaron 500g",          "4600006", "pcs",  7000,  5200,  60),
-            ("Yog' Oltin 1L",         "4600007", "l",   28000, 22000,  25),
-            ("Guruch 1kg",            "4600008", "kg",  14000, 10500,  90),
-            ("Mol gusht 1kg",         "4600009", "kg",  75000, 60000,  15),
-            ("Sabzi 1kg",             "4600010", "kg",   6000,  4000, 100),
-            ("Piyoz 1kg",             "4600011", "kg",   4500,  3000, 150),
-            ("Pomidor 1kg",           "4600012", "kg",   8000,  5500,  70),
-            ("Kartoshka 1kg",         "4600013", "kg",   5000,  3500, 200),
-            ("Choy Lipton 100g",      "4600014", "pcs", 18000, 13000,  40),
-            ("Qand 1kg",              "4600015", "kg",  16000, 12000,  55),
-        ]:
-            c.execute(
-                "INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?)",
-                (str(uuid.uuid4()), p[0], p[1], p[2], p[3], p[4], p[5], now)
-            )
-
-    # Demo sotuvlar — faqat bo'sh bo'lsa
-    if c.execute("SELECT COUNT(*) FROM sales").fetchone()[0] == 0:
-        now = _now()
-        for total, method in [
-            (35000,"cash"), (98500,"payme"), (22000,"cash"),
-            (150000,"uzcard"), (47500,"cash"), (63000,"click"),
-            (28000,"cash"), (112000,"uzcard"), (18500,"cash"), (75000,"humo"),
-        ]:
-            sid = str(uuid.uuid4())
-            c.execute("INSERT INTO sales VALUES (?,?,?,?,?,?,?)",
-                      (sid, _receipt(), "Demo Kassir", total, method, "synced", now))
-
-    # Demo fermalar — faqat bo'sh bo'lsa
-    if c.execute("SELECT COUNT(*) FROM farms").fetchone()[0] == 0:
-        now = _now()
-        f1 = str(uuid.uuid4())
-        f2 = str(uuid.uuid4())
-        f3 = str(uuid.uuid4())
-        for fid, name, owner, phone, address, region, ftype, debt, supplied in [
-            (f1,"Bahor Fermer Xo'jaligi","Toshmatov Behruz","+998901112233","Sirdaryo viloyati","Sirdaryo","don",320000,1850000),
-            (f2,"Yashil Vodiy FX",       "Rahimov Akbar",   "+998912223344","Farg'ona viloyati","Farg'ona","sabzavot",150000,970000),
-            (f3,"Nur Agro FX",           "Karimov Sanjar",  "+998923334455","Toshkent viloyati","Toshkent","chorva",0,540000),
-        ]:
-            c.execute("INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?)",
-                (fid,name,owner,phone,address,region,ftype,debt,supplied,now))
-
-        # Demo qarzlar
-        for fid, amount, paid, desc in [
-            (f1, 500000, 180000, "Urug' va o'g'it"),
-            (f2, 150000, 0,      "Qishloq xo'jaligi jihozlari"),
-        ]:
-            c.execute("INSERT INTO farm_debts VALUES (?,?,?,?,?,?,?,?,?)",
-                (str(uuid.uuid4()), fid, amount, paid, amount-paid, desc, "active", None, now))
-
-        # Demo yetkazmalar
-        for fid, total, ptype, paid, snumber in [
-            (f1, 850000,  "nasiya", 530000, "YT-001"),
-            (f1, 1000000, "naqd",   1000000,"YT-002"),
-            (f2, 970000,  "nasiya", 820000, "YT-003"),
-            (f3, 540000,  "naqd",   540000, "YT-004"),
-        ]:
-            sid = str(uuid.uuid4())
-            debt_a = total - paid
-            c.execute("INSERT INTO farm_supplies VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (sid, fid, snumber, total, ptype, paid, debt_a, "", now, now))
-            # Yetkazma mahsulotlari
-            c.execute("INSERT INTO farm_supply_items VALUES (?,?,?,?,?,?,?,?)",
-                (str(uuid.uuid4()), sid, fid, "Urug' va ko'chatlar", 100, "kg", total/100, total))
-
-    # Demo qarzdorlar — faqat bo'sh bo'lsa
-    if c.execute("SELECT COUNT(*) FROM debtors").fetchone()[0] == 0:
-        now = _now()
-        d1 = str(uuid.uuid4())
-        d2 = str(uuid.uuid4())
-        d3 = str(uuid.uuid4())
-        d4 = str(uuid.uuid4())
-        for did, name, phone, addr, debt, note in [
-            (d1, "Karimov Botir",    "+998901234567", "Chilonzor 5",      150000, "Doimiy mijoz"),
-            (d2, "Rahimova Malika",  "+998912345678", "Yunusobod 12",      85000, ""),
-            (d3, "Toshmatov Sardor", "+998923456789", "Mirzo Ulugbek 3",  320000, "Oylik to'laydi"),
-            (d4, "Usmonov Jasur",    "+998934567890", "Shayxontohur 7",        0, ""),
-        ]:
-            c.execute("INSERT INTO debtors VALUES (?,?,?,?,?,?,?)",
-                      (did, name, phone, addr, debt, now, note))
-        # Demo qarzlar
-        for did, total, paid, desc in [
-            (d1, 150000,      0, "Oziq-ovqat mahsulotlari"),
-            (d2,  85000,      0, "Kunlik xarid"),
-            (d3, 500000, 180000, "Oylik zakaz"),
-        ]:
-            c.execute("INSERT INTO debts VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (str(uuid.uuid4()), did, None, total, paid, total-paid,
-                 desc, "active", None, now))
-
+    # MySQL da har bir CREATE TABLE alohida
+    for stmt in _TABLES_MYSQL.split(";"):
+        stmt = stmt.strip()
+        if stmt:
+            try:
+                c.execute(stmt)
+            except Exception as e:
+                if "already exists" in str(e) or "1050" in str(e):
+                    pass  # Jadval mavjud — o'tkazib yubor
+                else:
+                    print(f"  ⚠️  SQL xato: {e}")
+    _seed_mysql(c, conn)
     conn.commit()
     conn.close()
-    print(f"  DB: {DB_PATH}")
+    print(f"  DB (MySQL): {DB_CONFIG['host']}/{DB_CONFIG['database']}")
 
-def _db():
+
+def _init_sqlite():
+    import sqlite3
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    c = conn.cursor()
+    c.executescript(_TABLES_SQLITE)
+    _seed_sqlite(c)
+    conn.commit()
+    conn.close()
+    print(f"  DB (SQLite): {DB_PATH}")
 
+
+def _seed_sqlite(c):
+    """SQLite demo ma'lumotlari"""
+    import sqlite3
+    now = _now()
+    if c.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
+        for p in [
+            # ── Oziq-ovqat asosiy ──────────────────────────────────────
+            ("Non Obi 500g",          "4600001","pcs",  3500,  2200, 120),
+            ("Sut 1L Nestle",          "4600002","l",    9800,  7500,  45),
+            ("Shakar 1kg",             "4600003","kg",  12000,  9000,  80),
+            ("Tuxum 10 dona",          "4600004","pcs", 22000, 17000,  30),
+            ("Coca-Cola 0.5L",         "4600005","pcs",  8500,  6000, 200),
+            ("Makaron 500g",           "4600006","pcs",  7000,  5200,  60),
+            ("Yog Oltin 1L",           "4600007","l",   28000, 22000,  25),
+            ("Guruch 1kg",             "4600008","kg",  14000, 10500,  90),
+            ("Mol gusht 1kg",          "4600009","kg",  75000, 60000,  15),
+            ("Sabzi 1kg",              "4600010","kg",   6000,  4000, 100),
+            ("Piyoz 1kg",              "4600011","kg",   4500,  3000, 150),
+            ("Pomidor 1kg",            "4600012","kg",   8000,  5500,  70),
+            ("Kartoshka 1kg",          "4600013","kg",   5000,  3500, 200),
+            ("Choy Lipton 100g",       "4600014","pcs", 18000, 13000,  40),
+            ("Qand 1kg",               "4600015","kg",  16000, 12000,  55),
+            # ── Optom tovarlar (Отгрузка №9315) ───────────────────────
+            ("Tilton Kachok 0.5l Choy",      "4601001","pcs", 16000, 11000,  10),
+            ("APREL KAITA 0.5l Shisha",      "4601002","pcs", 10800,  7500,  12),
+            ("Azelit Grass antilit 600ml",   "4601003","pcs", 23000, 16000,   2),
+            ("Novot Eryon Shirin tola kg",   "4601004","pcs",142000,100000,   5),
+            ("Olivia Sovun 140 gr",          "4601005","pcs",150000,110000,   4),
+            ("Flecha Aldar Zira Choy 350g",  "4601006","pcs",  6800,  4800,  18),
+            ("Naturella Zelyoniy Garox 400g","4601007","pcs", 24000, 17000,   3),
+            ("Oq Qand 10kg",                 "4601008","kg",   7000,  5000,  15),
+            ("Bavi 70g",                     "4601009","pcs",  6600,  4500,  24),
+            ("Patr Pichin 4kg karobka",      "4601010","box",130000, 95000,   2),
+            ("Angel 100gr Xamirturish",      "4601011","box",  5300,  3800,  20),
+            ("Orbit Sadich 408g",            "4601012","pcs", 58000, 42000,   1),
+            ("Malyuk Standart 2 300g",       "4601013","pcs", 59000, 43000,   2),
+            ("Nutriak Kok 300g",             "4601014","pcs", 58000, 42000,   4),
+            ("TWO BITE PICHIN 2kg karobka",  "4601015","box", 52000, 38000,   2),
+            ("Ole pecheni 3.5kg karobka",    "4601016","box",133000, 98000,   1),
+            ("Yubleyni Vafli 3kg assarti",   "4601017","box", 72000, 53000,   2),
+            ("Shkoladli Vafli 2kg karobka",  "4601018","box", 96000, 70000,   1),
+            ("Tamat orikzor mayda 0.43ml",   "4601019","pcs", 15000, 10500,  20),
+            ("BUMAGA 777 arzon",             "4601020","pcs",  3500,  2500,  30),
+            ("Kristal Gel 500ml",            "4601021","pcs",  9000,  6500,   2),
+            ("Mico food kukuruz 1kg",        "4601022","kg",  38000, 27000, 220),
+            ("Chortoq 0.5l Shisha Choy",     "4601023","pcs", 16000, 11000,  10),
+            ("Angel Xamirturish 100g yirik", "4601024","pcs",  5300,  3800,  20),
+        ]:
+            c.execute("INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?)",
+                (str(uuid.uuid4()),p[0],p[1],p[2],p[3],p[4],p[5],now))
+
+    if c.execute("SELECT COUNT(*) FROM sales").fetchone()[0] == 0:
+        for total, method in [
+            (35000,"cash"),(98500,"payme"),(22000,"cash"),
+            (150000,"uzcard"),(47500,"cash"),(63000,"click"),
+            (28000,"cash"),(112000,"uzcard"),(18500,"cash"),(75000,"humo"),
+        ]:
+            c.execute("INSERT INTO sales VALUES (?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()),_receipt(),"Demo Kassir",total,method,"synced",now))
+
+    if c.execute("SELECT COUNT(*) FROM farms").fetchone()[0] == 0:
+        f1,f2,f3 = str(uuid.uuid4()),str(uuid.uuid4()),str(uuid.uuid4())
+        for fid,name,owner,phone,address,region,ftype,debt,supplied in [
+            (f1,"Bahor Fermer Xo'jaligi","Toshmatov Behruz","+998901112233","Sirdaryo","Sirdaryo","don",320000,1850000),
+            (f2,"Yashil Vodiy FX","Rahimov Akbar","+998912223344","Farg'ona","Farg'ona","sabzavot",150000,970000),
+            (f3,"Nur Agro FX","Karimov Sanjar","+998923334455","Toshkent","Toshkent","chorva",0,540000),
+        ]:
+            c.execute("INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,notes,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,1,?)",
+                (fid,name,owner,phone,address,region,ftype,debt,supplied,"",now))
+        for fid,amt,paid,desc in [(f1,500000,180000,"Urug' va o'g'it"),(f2,150000,0,"Jihoz")]:
+            c.execute("INSERT INTO farm_debts VALUES (?,?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()),fid,amt,paid,amt-paid,desc,"active",None,now))
+
+    if c.execute("SELECT COUNT(*) FROM debtors").fetchone()[0] == 0:
+        d1,d2,d3,d4 = [str(uuid.uuid4()) for _ in range(4)]
+        for did,name,phone,addr,debt,note in [
+            (d1,"Karimov Botir","+998901234567","Chilonzor 5",150000,"Doimiy mijoz"),
+            (d2,"Rahimova Malika","+998912345678","Yunusobod 12",85000,""),
+            (d3,"Toshmatov Sardor","+998923456789","Mirzo Ulugbek 3",320000,"Oylik to'laydi"),
+            (d4,"Usmonov Jasur","+998934567890","Shayxontohur 7",0,""),
+        ]:
+            c.execute("INSERT INTO debtors VALUES (?,?,?,?,?,?,?)",
+                (did,name,phone,addr,debt,now,note))
+        for did,total,paid,desc in [
+            (d1,150000,0,"Oziq-ovqat mahsulotlari"),
+            (d2,85000,0,"Kunlik xarid"),
+            (d3,500000,180000,"Oylik zakaz"),
+        ]:
+            c.execute("INSERT INTO debts VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()),did,None,total,paid,total-paid,desc,"active",None,now))
+
+
+def _seed_mysql(c, conn):
+    """MySQL demo ma'lumotlari"""
+    now = _now()
+    ph = "%s"
+
+    c.execute("SELECT COUNT(*) as cnt FROM products")
+    if c.fetchone()['cnt'] == 0:
+        for p in [
+            ("Non Obi 500g","4600001","pcs",3500,2200,120),
+            ("Sut 1L Nestle","4600002","l",9800,7500,45),
+            ("Shakar 1kg","4600003","kg",12000,9000,80),
+            ("Coca-Cola 0.5L","4600004","pcs",8500,6000,200),
+            ("Makaron 500g","4600005","pcs",7000,5200,60),
+            ("Guruch 1kg","4600006","kg",14000,10500,90),
+            ("Sabzi 1kg","4600007","kg",6000,4000,100),
+            ("Kartoshka 1kg","4600008","kg",5000,3500,200),
+            ("Choy Lipton 100g","4600009","pcs",18000,13000,40),
+            ("Qand 1kg","4600010","kg",16000,12000,55),
+        ]:
+            c.execute(
+                "INSERT INTO products VALUES (%s,%s,%s,%s,%s,%s,%s,1,%s)",
+                (str(uuid.uuid4()),p[0],p[1],p[2],p[3],p[4],p[5],now))
+
+    c.execute("SELECT COUNT(*) as cnt FROM sales")
+    if c.fetchone()['cnt'] == 0:
+        for total, method in [(35000,"cash"),(98500,"payme"),(22000,"cash"),
+                               (150000,"uzcard"),(47500,"cash"),(63000,"click")]:
+            c.execute(
+                "INSERT INTO sales VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (str(uuid.uuid4()),_receipt(),"Demo Kassir",total,method,"synced",now))
+
+    c.execute("SELECT COUNT(*) as cnt FROM farms")
+    if c.fetchone()['cnt'] == 0:
+        f1,f2 = str(uuid.uuid4()),str(uuid.uuid4())
+        for fid,name,owner,phone,addr,region,ftype,debt,supplied in [
+            (f1,"Bahor Fermer Xo'jaligi","Toshmatov Behruz","+998901112233","Sirdaryo","Sirdaryo","don",320000,1850000),
+            (f2,"Yashil Vodiy FX","Rahimov Akbar","+998912223344","Farg'ona","Farg'ona","sabzavot",150000,970000),
+        ]:
+            c.execute(
+                "INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,notes,is_active,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)",
+                (fid,name,owner,phone,addr,region,ftype,debt,supplied,now))
+
+    c.execute("SELECT COUNT(*) as cnt FROM debtors")
+    if c.fetchone()['cnt'] == 0:
+        d1,d2 = str(uuid.uuid4()),str(uuid.uuid4())
+        for did,name,phone,addr,debt,note in [
+            (d1,"Karimov Botir","+998901234567","Chilonzor 5",150000,"Doimiy mijoz"),
+            (d2,"Rahimova Malika","+998912345678","Yunusobod 12",85000,""),
+        ]:
+            c.execute(
+                "INSERT INTO debtors VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (did,name,phone,addr,debt,now,note))
+    conn.commit()
+
+
+
+
+
+
+# ── Yordamchi funksiyalar ────────────────────────────────────
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
 def _receipt():
     d = datetime.now().strftime("%Y%m%d")
     return f"PK-{d}-{str(uuid.uuid4())[:4].upper()}"
-
-def _rows(cursor):
-    return [dict(r) for r in cursor.fetchall()]
 
 def _ok(data, st=200):   return st, data
 def _err(msg, st=400):   return st, {"error": msg}
