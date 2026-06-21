@@ -448,7 +448,11 @@ function renderProducts(prods, el) {
     const stock  = (p.stock_levels||[{}])[0];
     const qty    = stock.quantity||p.stock_qty||0;
     const isLow  = qty < 20;
+    const img    = p.image_url
+      ? `<img src="${p.image_url}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">`
+      : `<div style="width:36px;height:36px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px">📦</div>`;
     return `<tr>
+      <td style="width:48px">${img}</td>
       <td style="font-weight:600">${p.name}</td>
       <td style="font-family:monospace;font-size:12px;color:#64748b">${p.barcode||'—'}</td>
       <td>${p.unit}</td>
@@ -473,6 +477,7 @@ function renderProducts(prods, el) {
   <div class="card" style="padding:0;overflow:hidden">
     <table class="tbl" id="products-table">
       <thead><tr>
+        <th style="width:48px">📷</th>
         <th>Mahsulot nomi</th><th>Shtrixkod</th><th>Birlik</th>
         <th style="text-align:right">Narx</th><th style="text-align:right">Tannarx</th>
         <th style="text-align:right">Marjin</th><th style="text-align:center">Zaxira</th><th style="text-align:center">Amal</th>
@@ -489,7 +494,10 @@ function filterProducts(q) {
   ) : window._allProds;
   const rows = filtered.map(p => {
     const margin = p.margin_pct||0; const qty = p.stock_qty||0; const isLow = qty<20;
-    return `<tr><td style="font-weight:600">${p.name}</td><td style="font-family:monospace;font-size:12px;color:#64748b">${p.barcode||'—'}</td><td>${p.unit}</td><td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.price)}</td><td style="text-align:right;color:#64748b">${fmt(p.cost_price)}</td><td style="text-align:right"><span style="font-weight:600;color:${margin>0?'#16a34a':'#dc2626'}">${pct(margin)}</span></td><td style="text-align:center"><span class="badge ${isLow?'badge-red':'badge-green'}">${qty}</span></td><td style="text-align:center"><button class="btn btn-gray" style="padding:4px 10px;font-size:11px" onclick="editProduct('${p.id}','${p.name.replace(/'/g,"\\'")}',${p.price},${p.cost_price},'${p.barcode||''}','${p.unit}')">✏️</button><button class="btn btn-red" style="padding:4px 10px;font-size:11px;margin-left:4px" onclick="deleteProduct('${p.id}','${p.name.replace(/'/g,"\\'")}')">🗑</button></td></tr>`;
+    const img = p.image_url
+      ? `<img src="${p.image_url}" style="width:32px;height:32px;object-fit:cover;border-radius:5px;border:1px solid #e2e8f0">`
+      : `<div style="width:32px;height:32px;background:#f1f5f9;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:16px">📦</div>`;
+    return `<tr><td style="width:44px">${img}</td><td style="font-weight:600">${p.name}</td><td style="font-family:monospace;font-size:12px;color:#64748b">${p.barcode||'—'}</td><td>${p.unit}</td><td style="text-align:right;font-weight:700;color:#2563eb">${fmt(p.price)}</td><td style="text-align:right;color:#64748b">${fmt(p.cost_price)}</td><td style="text-align:right"><span style="font-weight:600;color:${margin>0?'#16a34a':'#dc2626'}">${pct(margin)}</span></td><td style="text-align:center"><span class="badge ${isLow?'badge-red':'badge-green'}">${qty}</span></td><td style="text-align:center"><button class="btn btn-gray" style="padding:4px 10px;font-size:11px" onclick="editProduct('${p.id}','${p.name.replace(/'/g,"\\'")}',${p.price},${p.cost_price},'${p.barcode||''}','${p.unit}','${p.image_url||''}')">✏️</button><button class="btn btn-red" style="padding:4px 10px;font-size:11px;margin-left:4px" onclick="deleteProduct('${p.id}','${p.name.replace(/'/g,"\\'")}')">🗑</button></td></tr>`;
   }).join('');
   document.getElementById('products-tbody').innerHTML = rows;
 }
@@ -509,6 +517,13 @@ function openAddProduct() {
           <div><label>Shtrixkod</label><input id="pn-barcode" placeholder="4600001234567"></div>
           <div><label>Birlik</label><select id="pn-unit"><option value="pcs">Dona</option><option value="kg">Kilogramm</option><option value="l">Litr</option><option value="m">Metr</option><option value="box">Quti</option></select></div>
         </div>
+        <div class="form-row">
+          <div>
+            <label>Rasm URL (ixtiyoriy)</label>
+            <input id="pn-image" placeholder="https://example.com/image.jpg">
+            <div id="pn-img-preview" style="margin-top:6px"></div>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-gray" onclick="document.getElementById('add-prod-modal').remove()">Bekor</button>
@@ -516,6 +531,13 @@ function openAddProduct() {
       </div>
     </div>
   </div>`);
+  document.getElementById('pn-image').addEventListener('input', e => {
+    const url = e.target.value.trim();
+    const prev = document.getElementById('pn-img-preview');
+    prev.innerHTML = url
+      ? `<img src="${url}" style="height:60px;border-radius:6px;border:1px solid #e2e8f0" onerror="this.style.display='none'">`
+      : '';
+  });
 }
 
 async function saveNewProduct() {
@@ -525,14 +547,15 @@ async function saveNewProduct() {
   const res = await api('POST','/products',{
     name, price, cost_price:parseFloat(document.getElementById('pn-cost').value)||0,
     barcode:document.getElementById('pn-barcode').value||null,
-    unit:document.getElementById('pn-unit').value
+    unit:document.getElementById('pn-unit').value,
+    image_url:document.getElementById('pn-image')?.value.trim()||null,
   });
   document.getElementById('add-prod-modal')?.remove();
   toast(`✅ "${res.name}" qo'shildi!`);
   products();
 }
 
-function editProduct(id,name,price,cost,barcode,unit){
+function editProduct(id,name,price,cost,barcode,unit,imageUrl=''){
   document.body.insertAdjacentHTML('beforeend',`
   <div class="modal-bg" id="edit-prod-modal">
     <div class="modal">
@@ -546,6 +569,14 @@ function editProduct(id,name,price,cost,barcode,unit){
         <div class="form-row cols-2">
           <div><label>Shtrixkod</label><input id="ep-barcode" value="${barcode}"></div>
           <div><label>Birlik</label><select id="ep-unit">${['pcs','kg','l','m','box'].map(u=>`<option value="${u}" ${u===unit?'selected':''}>${{pcs:'Dona',kg:'Kg',l:'Litr',m:'Metr',box:'Quti'}[u]}</option>`).join('')}</select></div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Rasm URL</label>
+            <input id="ep-image" value="${imageUrl||''}" placeholder="https://example.com/image.jpg"
+              oninput="const p=document.getElementById('ep-img-prev');p.innerHTML=this.value?'<img src=\''+this.value+'\' style=\'height:50px;border-radius:5px;margin-top:4px\' onerror=\'this.style.display=none\'>':''">
+            <div id="ep-img-prev">${imageUrl?`<img src="${imageUrl}" style="height:50px;border-radius:5px;margin-top:4px" onerror="this.style.display='none'">`:''}</div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -561,7 +592,8 @@ async function saveEditProduct(id){
     price:parseFloat(document.getElementById('ep-price').value),
     cost_price:parseFloat(document.getElementById('ep-cost').value),
     barcode:document.getElementById('ep-barcode').value,
-    unit:document.getElementById('ep-unit').value
+    unit:document.getElementById('ep-unit').value,
+    image_url:document.getElementById('ep-image')?.value.trim()||null,
   });
   document.getElementById('edit-prod-modal')?.remove();
   toast('✅ Mahsulot yangilandi!'); products();
@@ -943,31 +975,108 @@ async function showReport(type, btn) {
 // ═══════════════════ SOTUVLAR ═══════════════════
 async function sales() {
   const el = document.getElementById('main-content');
+  el.innerHTML = '<p style="color:#94a3b8;padding:20px;text-align:center">⏳ Yuklanmoqda...</p>';
   const data = await api('GET','/sales');
-  const rows = (data||[]).map(s=>{
-    const m = {cash:'💵 Naqd',uzcard:'💳 Uzcard',humo:'💳 Humo',payme:'📱 Payme',click:'📱 Click',uzum:'📱 Uzum'};
-    return `<tr>
-      <td style="font-family:monospace;font-size:12px">${s.receipt_number||'—'}</td>
-      <td style="font-size:12px;color:#64748b">${(s.sale_time||'').slice(0,16)}</td>
-      <td>${s.cashier||'—'}</td>
+  const m = {cash:'💵 Naqd',uzcard:'💳 Uzcard',humo:'💳 Humo',
+              payme:'📱 Payme',click:'📱 Click',uzum:'📱 Uzum',nasiya:'💳 Nasiya'};
+
+  const rows = (data||[]).map(s => `
+    <tr style="cursor:pointer" onclick="showSaleReceipt('${s.id}')"
+      title="Chekni ko'rish">
+      <td>
+        <span style="font-family:monospace;font-size:12px;font-weight:600;color:#2563eb">${s.receipt_number||'—'}</span>
+        <span style="font-size:10px;color:#94a3b8;margin-left:4px">🖨️</span>
+      </td>
+      <td style="font-size:12px;color:#64748b">${(s.sale_time||'').slice(0,16).replace('T',' ')}</td>
+      <td>${s.cashier||'Kassir'}</td>
       <td style="text-align:right;font-weight:700;color:#2563eb">${fmt(s.total_amount||0)}</td>
       <td>${m[s.payment_method]||s.payment_method||'—'}</td>
-      <td><span class="badge badge-green">✓ ${s.sync_status||'synced'}</span></td>
-    </tr>`;
-  }).join('');
-  const total = (data||[]).reduce((s,x)=>s+(x.total_amount||0),0);
+      <td><span class="badge badge-green" style="font-size:10px">✓ synced</span></td>
+      <td>
+        <button class="btn btn-gray" style="padding:3px 10px;font-size:11px"
+          onclick="event.stopPropagation();showSaleReceipt('${s.id}')">
+          🖨️ Chek
+        </button>
+      </td>
+    </tr>`).join('');
+
+  const total = (data||[]).reduce((s,x) => s + _fltVal(x.total_amount), 0);
   el.innerHTML = `
-  <div class="card" style="margin-bottom:16px;padding:12px 20px;display:flex;gap:24px;align-items:center">
-    <div><span style="font-size:12px;color:#64748b">Jami sotuvlar:</span> <strong>${(data||[]).length} ta</strong></div>
-    <div><span style="font-size:12px;color:#64748b">Jami daromad:</span> <strong style="color:#2563eb">${fmt(total)}</strong></div>
+  <div class="card" style="margin-bottom:12px;padding:12px 20px;display:flex;gap:24px;align-items:center">
+    <div><span style="font-size:12px;color:#64748b">Jami sotuvlar:</span>
+      <strong style="margin-left:4px">${(data||[]).length} ta</strong></div>
+    <div><span style="font-size:12px;color:#64748b">Jami daromad:</span>
+      <strong style="color:#2563eb;margin-left:4px">${fmt(total)}</strong></div>
+    <button class="btn btn-gray" style="margin-left:auto;font-size:12px" onclick="sales()">🔄 Yangilash</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
-    <table class="tbl"><thead><tr><th>Chek №</th><th>Vaqt</th><th>Kassir</th><th style="text-align:right">Summa</th><th>To'lov</th><th>Holat</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Sotuvlar yo\'q</td></tr>'}</tbody></table>
-  </div>`;
+    <table class="tbl">
+      <thead><tr>
+        <th>Chek №</th><th>Vaqt</th><th>Kassir</th>
+        <th style="text-align:right">Summa</th><th>To'lov</th><th>Holat</th><th></th>
+      </tr></thead>
+      <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:30px">Sotuvlar yo\'q</td></tr>'}</tbody>
+    </table>
+  </div>
+  <p style="font-size:11px;color:#94a3b8;margin-top:8px;text-align:center">
+    💡 Chek raqamiga yoki 🖨️ tugmasiga bosing — chekni qayta ko'rasiz
+  </p>`;
+}
+
+// ── Sotuvdan chekni qayta chiqarish ───────────────────────────
+async function showSaleReceipt(saleId) {
+  // Sotuv ma'lumotlarini olish
+  const sales_data = await api('GET', '/sales');
+  const sale = (sales_data||[]).find(s => s.id === saleId);
+  if (!sale) { toast('Sotuv topilmadi', 'err'); return; }
+
+  // Chekni ko'rsatish
+  printSaleReceipt(sale);
+}
+
+function _fltVal(v) {
+  if (!v) return 0;
+  return parseFloat(String(v)) || 0;
 }
 
 // ═══════════════════ ISHGA TUSHIRISH ═══════════════════
+
+// ── Sotuv cheki ──────────────────────────────────────────────
+function printSaleReceipt(sale) {
+  if (!sale || sale.error) return;
+  const items = (sale.items||[]).map(i =>
+    `<div class="r-row">
+      <span>${i.product_name||i.name||'—'} ×${i.quantity||1}</span>
+      <span>${fmt(i.total_price||0)}</span>
+    </div>`
+  ).join('');
+  const pays = (sale.payments||[]).map(p => {
+    const m = {cash:'💵 Naqd',uzcard:'💳 Uzcard',humo:'💳 Humo',
+                payme:'📱 Payme',click:'📱 Click',uzum:'📱 Uzum',nasiya:'💳 Nasiya'};
+    return `<div class="r-row"><span>${m[p.method]||p.method||'Naqd'}:</span>
+      <span>${fmt(p.amount||sale.total_amount||0)}</span></div>`;
+  }).join('') || `<div class="r-row"><span>💵 Naqd:</span><span>${fmt(sale.total_amount||0)}</span></div>`;
+
+  const html = `<div class="receipt-paper">
+    <div class="r-title">${getShopName()}</div>
+    <div style="text-align:center;font-size:11px;color:#64748b">${getShopPhone()}</div>
+    <div class="r-divider"></div>
+    <div class="r-row"><span>Chek:</span><span>${sale.receipt_number||'—'}</span></div>
+    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')} ${new Date().toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></div>
+    <div class="r-row"><span>Kassir:</span><span>${sale.cashier||'Kassir'}</span></div>
+    <div class="r-divider"></div>
+    ${items || '<div style="text-align:center;color:#94a3b8;font-size:11px">Tovarlar—</div>'}
+    <div class="r-divider"></div>
+    <div class="r-row r-total"><span>JAMI:</span><span>${fmt(sale.total_amount||0)}</span></div>
+    <div class="r-divider"></div>
+    ${pays}
+    <div class="r-divider"></div>
+    ${sale.fiscal_url ? `<div style="text-align:center;font-size:10px;color:#64748b">OFD: ${sale.fiscal_url}</div><div class="r-divider"></div>` : ''}
+    <div style="text-align:center;margin-top:6px;font-size:12px">${getReceiptFooter()}</div>
+  </div>`;
+  showPrintModal(html, 'Sotuv Cheki');
+}
+
 show('dashboard');
 
 // ═══════════════════════════════════════════════════════════════

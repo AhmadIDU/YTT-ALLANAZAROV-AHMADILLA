@@ -119,7 +119,8 @@ CREATE TABLE IF NOT EXISTS products (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, barcode TEXT,
     unit TEXT DEFAULT 'pcs', price REAL DEFAULT 0,
     cost_price REAL DEFAULT 0, stock_qty REAL DEFAULT 0,
-    is_active INTEGER DEFAULT 1, created_at TEXT
+    is_active INTEGER DEFAULT 1, created_at TEXT,
+    image_url TEXT
 );
 CREATE TABLE IF NOT EXISTS sales (
     id TEXT PRIMARY KEY, receipt_number TEXT,
@@ -189,7 +190,8 @@ CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL,
     barcode VARCHAR(100), unit VARCHAR(20) DEFAULT 'pcs',
     price DECIMAL(15,2) DEFAULT 0, cost_price DECIMAL(15,2) DEFAULT 0,
-    stock_qty DECIMAL(15,3) DEFAULT 0, is_active TINYINT DEFAULT 1, created_at VARCHAR(50)
+    stock_qty DECIMAL(15,3) DEFAULT 0, is_active TINYINT DEFAULT 1, created_at VARCHAR(50),
+    image_url TEXT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS sales (
     id VARCHAR(36) PRIMARY KEY, receipt_number VARCHAR(50),
@@ -329,7 +331,7 @@ def _seed_sqlite(c):
             ("Kristal Gel 500ml Qimmat",           "4601025",  "pcs",   9000,   6500,    2),
             ("Mico food kukuruz 1kg",              "4601026",  "kg",   38000,  27000,  220),
         ]:
-            c.execute("INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?)",
+            c.execute("INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?,NULL)",
                 (str(uuid.uuid4()),p[0],p[1],p[2],p[3],p[4],p[5],now))
 
 
@@ -369,7 +371,7 @@ def _seed_mysql(c, conn):
             ("Mico food kukuruz 1kg",              "4601026", "kg",   38000,  27000,  220),
         ]:
             c.execute(
-                "INSERT INTO products VALUES (%s,%s,%s,%s,%s,%s,%s,1,%s)",
+                "INSERT INTO products VALUES (%s,%s,%s,%s,%s,%s,%s,1,%s,NULL)",
                 (str(uuid.uuid4()),p[0],p[1],p[2],p[3],p[4],p[5],now))
 
     c.execute("SELECT COUNT(*) as cnt FROM sales")
@@ -584,10 +586,12 @@ def handle_api(method, path, body, params):
         # create
         if method == "POST" and len(parts) == 3:
             pid = str(uuid.uuid4())
-            conn.execute("INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?)",
+            conn.execute("INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?,?)",
                 (pid, body.get("name",""), body.get("barcode",""),
                  body.get("unit","pcs"), body.get("price",0),
-                 body.get("cost_price",0), 0, _now()))
+                 body.get("cost_price",0), 0, _now(),
+                 body.get("image_url") or None))
+            conn.commit()
             conn.commit()
             row = dict(conn.execute("SELECT * FROM products WHERE id=?",(pid,)).fetchone())
             conn.close()
@@ -597,7 +601,7 @@ def handle_api(method, path, body, params):
         if method == "PUT" and len(parts) == 4:
             pid = parts[3]
             fields, vals = [], []
-            for f in ("name","price","cost_price","barcode","unit","is_active"):
+            for f in ("name","price","cost_price","barcode","unit","is_active","image_url"):
                 if f in body:
                     fields.append(f"{f}=?"); vals.append(body[f])
             if fields:
@@ -872,7 +876,7 @@ def handle_api(method, path, body, params):
                     for r in rows:
                         if not r.get("approved",True): continue
                         pid = str(uuid.uuid4())
-                        conn.execute(("INSERT IGNORE" if DB_MODE=="mysql" else "INSERT OR IGNORE") + " INTO products VALUES (?,?,?,?,?,?,?,1,?)",
+                        conn.execute(("INSERT IGNORE" if DB_MODE=="mysql" else "INSERT OR IGNORE") + " INTO products VALUES (?,?,?,?,?,?,?,1,?,NULL)",
                             (pid, r.get("name",""), r.get("barcode",""), r.get("unit","pcs"),
                              round(r.get("unit_cost",0)*1.3,0), r.get("unit_cost",0),
                              r.get("qty",0), _now()))
