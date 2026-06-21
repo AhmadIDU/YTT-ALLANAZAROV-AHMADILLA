@@ -506,22 +506,66 @@ function openAddProduct() {
   document.body.insertAdjacentHTML('beforeend',`
   <div class="modal-bg" id="add-prod-modal">
     <div class="modal">
-      <div class="modal-header"><h3>➕ Yangi mahsulot</h3><button class="btn btn-gray" onclick="document.getElementById('add-prod-modal').remove()">✕</button></div>
+      <div class="modal-header">
+        <h3>➕ Yangi mahsulot</h3>
+        <button class="btn btn-gray" onclick="document.getElementById('add-prod-modal').remove()">✕</button>
+      </div>
       <div class="modal-body">
-        <div class="form-row"><div><label>Nomi *</label><input id="pn-name" placeholder="Non Obi 500g"></div></div>
+        <div class="form-row"><div><label>Nomi *</label>
+          <input id="pn-name" placeholder="Non Obi 500g" autofocus></div></div>
         <div class="form-row cols-2">
-          <div><label>Narx (so'm) *</label><input id="pn-price" type="number" min="0" placeholder="15000"></div>
-          <div><label>Tannarx (so'm)</label><input id="pn-cost" type="number" min="0" placeholder="10000"></div>
+          <div><label>Narx (so'm) *</label>
+            <input id="pn-price" type="number" min="0" placeholder="15000"></div>
+          <div><label>Tannarx (so'm)</label>
+            <input id="pn-cost" type="number" min="0" placeholder="10000"></div>
         </div>
         <div class="form-row cols-2">
-          <div><label>Shtrixkod</label><input id="pn-barcode" placeholder="4600001234567"></div>
-          <div><label>Birlik</label><select id="pn-unit"><option value="pcs">Dona</option><option value="kg">Kilogramm</option><option value="l">Litr</option><option value="m">Metr</option><option value="box">Quti</option></select></div>
+          <div><label>Shtrixkod</label>
+            <input id="pn-barcode" placeholder="4600001234567"></div>
+          <div><label>Birlik</label>
+            <select id="pn-unit">
+              <option value="pcs">Dona</option>
+              <option value="kg">Kilogramm</option>
+              <option value="l">Litr</option>
+              <option value="m">Metr</option>
+              <option value="box">Quti</option>
+            </select>
+          </div>
         </div>
+
+        <!-- Rasm yuklash -->
         <div class="form-row">
           <div>
-            <label>Rasm URL (ixtiyoriy)</label>
-            <input id="pn-image" placeholder="https://example.com/image.jpg">
-            <div id="pn-img-preview" style="margin-top:6px"></div>
+            <label>Mahsulot rasmi</label>
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-top:4px">
+              <!-- Preview -->
+              <div id="pn-img-box"
+                style="width:80px;height:80px;border:2px dashed #cbd5e1;border-radius:10px;
+                       display:flex;align-items:center;justify-content:center;font-size:28px;
+                       cursor:pointer;background:#f8fafc;flex-shrink:0;overflow:hidden"
+                onclick="document.getElementById('pn-file-input').click()"
+                title="Rasm tanlash">
+                📷
+              </div>
+              <!-- Tugmalar -->
+              <div style="flex:1">
+                <input type="file" id="pn-file-input" accept="image/*"
+                  style="display:none" onchange="handleProdImg(this,'pn-img-box','pn-img-data')">
+                <button class="btn btn-gray" style="width:100%;margin-bottom:6px"
+                  onclick="document.getElementById('pn-file-input').click()">
+                  🖼️ Galereyadan tanlash
+                </button>
+                <button class="btn btn-gray" style="width:100%;font-size:11px;color:#dc2626"
+                  onclick="clearProdImg('pn-img-box','pn-img-data','pn-file-input')">
+                  🗑 Rasmni o'chirish
+                </button>
+                <div style="font-size:10px;color:#94a3b8;margin-top:4px">
+                  JPG, PNG, WEBP · max 2MB
+                </div>
+              </div>
+            </div>
+            <!-- Base64 ma'lumot saqlash -->
+            <input type="hidden" id="pn-img-data" value="">
           </div>
         </div>
       </div>
@@ -531,51 +575,125 @@ function openAddProduct() {
       </div>
     </div>
   </div>`);
-  document.getElementById('pn-image').addEventListener('input', e => {
-    const url = e.target.value.trim();
-    const prev = document.getElementById('pn-img-preview');
-    prev.innerHTML = url
-      ? `<img src="${url}" style="height:60px;border-radius:6px;border:1px solid #e2e8f0" onerror="this.style.display='none'">`
-      : '';
-  });
+}
+
+// ── Rasm yuklash handler ──────────────────────────────────────
+function handleProdImg(input, boxId, dataId) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    toast('Rasm 2MB dan kichik bo\'lishi kerak!', 'err');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const base64 = e.target.result; // data:image/jpeg;base64,...
+    // Preview
+    const box = document.getElementById(boxId);
+    if (box) {
+      box.innerHTML = `<img src="${base64}"
+        style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
+      box.style.border = '2px solid #16a34a';
+    }
+    // Data saqlash
+    const dataEl = document.getElementById(dataId);
+    if (dataEl) dataEl.value = base64;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearProdImg(boxId, dataId, inputId) {
+  const box = document.getElementById(boxId);
+  if (box) {
+    box.innerHTML = '📷';
+    box.style.border = '2px dashed #cbd5e1';
+  }
+  const dataEl = document.getElementById(dataId);
+  if (dataEl) dataEl.value = '';
+  const inp = document.getElementById(inputId);
+  if (inp) inp.value = '';
 }
 
 async function saveNewProduct() {
-  const name=document.getElementById('pn-name').value.trim();
-  const price=parseFloat(document.getElementById('pn-price').value)||0;
-  if(!name||!price){toast('Nom va narx to\'ldirilishi shart!','err');return;}
+  const name  = document.getElementById('pn-name').value.trim();
+  const price = parseFloat(document.getElementById('pn-price').value)||0;
+  if (!name||!price) { toast('Nom va narx to\'ldirilishi shart!','err'); return; }
+
+  const imgData = document.getElementById('pn-img-data')?.value || null;
+
   const res = await api('POST','/products',{
-    name, price, cost_price:parseFloat(document.getElementById('pn-cost').value)||0,
-    barcode:document.getElementById('pn-barcode').value||null,
-    unit:document.getElementById('pn-unit').value,
-    image_url:document.getElementById('pn-image')?.value.trim()||null,
+    name, price,
+    cost_price: parseFloat(document.getElementById('pn-cost').value)||0,
+    barcode:    document.getElementById('pn-barcode').value||null,
+    unit:       document.getElementById('pn-unit').value,
+    image_url:  imgData || null,
   });
+  if (res.error) { toast(res.error,'err'); return; }
   document.getElementById('add-prod-modal')?.remove();
   toast(`✅ "${res.name}" qo'shildi!`);
   products();
+}
 }
 
 function editProduct(id,name,price,cost,barcode,unit,imageUrl=''){
   document.body.insertAdjacentHTML('beforeend',`
   <div class="modal-bg" id="edit-prod-modal">
     <div class="modal">
-      <div class="modal-header"><h3>✏️ Tahrirlash</h3><button class="btn btn-gray" onclick="document.getElementById('edit-prod-modal').remove()">✕</button></div>
+      <div class="modal-header">
+        <h3>✏️ Tahrirlash</h3>
+        <button class="btn btn-gray" onclick="document.getElementById('edit-prod-modal').remove()">✕</button>
+      </div>
       <div class="modal-body">
-        <div class="form-row"><div><label>Nomi</label><input id="ep-name" value="${name}"></div></div>
+        <div class="form-row"><div><label>Nomi</label>
+          <input id="ep-name" value="${name}"></div></div>
         <div class="form-row cols-2">
           <div><label>Narx</label><input id="ep-price" type="number" value="${price}"></div>
           <div><label>Tannarx</label><input id="ep-cost" type="number" value="${cost}"></div>
         </div>
         <div class="form-row cols-2">
           <div><label>Shtrixkod</label><input id="ep-barcode" value="${barcode}"></div>
-          <div><label>Birlik</label><select id="ep-unit">${['pcs','kg','l','m','box'].map(u=>`<option value="${u}" ${u===unit?'selected':''}>${{pcs:'Dona',kg:'Kg',l:'Litr',m:'Metr',box:'Quti'}[u]}</option>`).join('')}</select></div>
+          <div><label>Birlik</label>
+            <select id="ep-unit">
+              ${['pcs','kg','l','m','box'].map(u=>
+                `<option value="${u}" ${u===unit?'selected':''}>${{pcs:'Dona',kg:'Kg',l:'Litr',m:'Metr',box:'Quti'}[u]}</option>`
+              ).join('')}
+            </select>
+          </div>
         </div>
+
+        <!-- Rasm yuklash -->
         <div class="form-row">
           <div>
-            <label>Rasm URL</label>
-            <input id="ep-image" value="${imageUrl||''}" placeholder="https://example.com/image.jpg"
-              oninput="const p=document.getElementById('ep-img-prev');p.innerHTML=this.value?'<img src=\''+this.value+'\' style=\'height:50px;border-radius:5px;margin-top:4px\' onerror=\'this.style.display=none\'>':''">
-            <div id="ep-img-prev">${imageUrl?`<img src="${imageUrl}" style="height:50px;border-radius:5px;margin-top:4px" onerror="this.style.display='none'">`:''}</div>
+            <label>Mahsulot rasmi</label>
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-top:4px">
+              <div id="ep-img-box"
+                style="width:80px;height:80px;border:2px ${imageUrl?'solid #16a34a':'dashed #cbd5e1'};
+                       border-radius:10px;display:flex;align-items:center;justify-content:center;
+                       font-size:28px;cursor:pointer;background:#f8fafc;flex-shrink:0;overflow:hidden"
+                onclick="document.getElementById('ep-file-input').click()"
+                title="Rasm tanlash">
+                ${imageUrl
+                  ? `<img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px"
+                      onerror="this.parentElement.innerHTML='📷';this.parentElement.style.border='2px dashed #cbd5e1'">`
+                  : '📷'}
+              </div>
+              <div style="flex:1">
+                <input type="file" id="ep-file-input" accept="image/*"
+                  style="display:none" onchange="handleProdImg(this,'ep-img-box','ep-img-data')">
+                <button class="btn btn-gray" style="width:100%;margin-bottom:6px"
+                  onclick="document.getElementById('ep-file-input').click()">
+                  🖼️ Galereyadan tanlash
+                </button>
+                <button class="btn btn-gray" style="width:100%;font-size:11px;color:#dc2626"
+                  onclick="clearProdImg('ep-img-box','ep-img-data','ep-file-input')">
+                  🗑 Rasmni o'chirish
+                </button>
+                <div style="font-size:10px;color:#94a3b8;margin-top:4px">
+                  JPG, PNG, WEBP · max 2MB
+                </div>
+              </div>
+            </div>
+            <input type="hidden" id="ep-img-data" value="${imageUrl||''}">
           </div>
         </div>
       </div>
@@ -586,17 +704,20 @@ function editProduct(id,name,price,cost,barcode,unit,imageUrl=''){
     </div>
   </div>`);
 }
+
 async function saveEditProduct(id){
+  const imgData = document.getElementById('ep-img-data')?.value || null;
   await api('PUT',`/products/${id}`,{
-    name:document.getElementById('ep-name').value,
-    price:parseFloat(document.getElementById('ep-price').value),
-    cost_price:parseFloat(document.getElementById('ep-cost').value),
-    barcode:document.getElementById('ep-barcode').value,
-    unit:document.getElementById('ep-unit').value,
-    image_url:document.getElementById('ep-image')?.value.trim()||null,
+    name:       document.getElementById('ep-name').value,
+    price:      parseFloat(document.getElementById('ep-price').value),
+    cost_price: parseFloat(document.getElementById('ep-cost').value),
+    barcode:    document.getElementById('ep-barcode').value,
+    unit:       document.getElementById('ep-unit').value,
+    image_url:  imgData || null,
   });
   document.getElementById('edit-prod-modal')?.remove();
-  toast('✅ Mahsulot yangilandi!'); products();
+  toast('✅ Mahsulot yangilandi!');
+  products();
 }
 async function deleteProduct(id,name){
   if(!confirm(`"${name}" o'chirilsinmi?`)) return;
@@ -1424,42 +1545,27 @@ async function farms() {
 // ═══════════════════════════════════════════════════════════════
 
 // ── Asosiy sahifa ────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════
+// 💳 QARZDORLAR — KARTA KO'RINISH (ustiga bosganida detail)
+// ═══════════════════════════════════════════════════════════════
+
 async function debtors() {
   const el = document.getElementById('main-content');
-  el.innerHTML = '<p style="text-align:center;color:#94a3b8;padding:40px;font-size:16px">⏳ Yuklanmoqda...</p>';
-
+  el.innerHTML = '<p style="text-align:center;color:#94a3b8;padding:40px">⏳ Yuklanmoqda...</p>';
   try {
     const [dlist, stats] = await Promise.all([
-      api('GET', '/debtors'),
-      api('GET', '/debt-stats'),
+      api('GET','/debtors'),
+      api('GET','/debt-stats'),
     ]);
-
     window._debtorsList = dlist || [];
-
     el.innerHTML = `
-    <!-- Statistika -->
     <div class="grid-4" style="margin-bottom:16px">
-      <div class="card">
-        <h3>Jami qarzdorlar</h3>
-        <div class="val">${(dlist||[]).length}</div>
-        <div class="sub">nafar</div>
-      </div>
-      <div class="card">
-        <h3>Umumiy qarz</h3>
-        <div class="val" style="color:#dc2626">${fmt(stats.total_debt_amount||0)}</div>
-      </div>
-      <div class="card">
-        <h3>Faol qarzlar</h3>
-        <div class="val" style="color:#f59e0b">${stats.active_debts||0}</div>
-        <div class="sub">ta</div>
-      </div>
-      <div class="card">
-        <h3>Yig'ilgan pul</h3>
-        <div class="val" style="color:#16a34a">${fmt(stats.total_collected||0)}</div>
-      </div>
+      <div class="card"><h3>Qarzdorlar</h3><div class="val">${(dlist||[]).length}</div></div>
+      <div class="card"><h3>Umumiy qarz</h3><div class="val" style="color:#dc2626">${fmt(stats.total_debt_amount||0)}</div></div>
+      <div class="card"><h3>Faol qarzlar</h3><div class="val" style="color:#f59e0b">${stats.active_debts||0} ta</div></div>
+      <div class="card"><h3>Yig'ilgan</h3><div class="val" style="color:#16a34a">${fmt(stats.total_collected||0)}</div></div>
     </div>
-
-    <!-- Qidiruv + tugma -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap">
       <div class="search-box" style="flex:1;max-width:320px">
         <span class="search-icon">🔍</span>
@@ -1470,189 +1576,199 @@ async function debtors() {
         <button class="btn btn-blue" onclick="addDebtorModal()">➕ Yangi qarzdor</button>
       </div>
     </div>
-
-    <!-- Jadval -->
-    <div class="card" style="padding:0;overflow:hidden">
-      <table class="tbl">
-        <thead>
-          <tr>
-            <th style="width:180px">Qarzdor</th>
-            <th>Qarz tavsifi</th>
-            <th style="text-align:right">Jami qarz</th>
-            <th style="text-align:right">Qoldiq</th>
-            <th style="text-align:center;width:80px">To'lov %</th>
-            <th style="width:160px">Amal</th>
-          </tr>
-        </thead>
-        <tbody id="debtors-tbody">
-          <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">Yuklanmoqda...</td></tr>
-        </tbody>
-      </table>
+    <div id="debtors-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
     </div>`;
-
-    await renderDebtorsTable(dlist);
-
+    renderDebtorCards(dlist || []);
   } catch(e) {
     el.innerHTML = `<div style="text-align:center;padding:40px;color:#dc2626">Xato: ${e.message}</div>`;
-    console.error('debtors xato:', e);
   }
 }
 
-// ── Jadvalni to'ldirish ───────────────────────────────────────
-async function renderDebtorsTable(dlist) {
-  const allDebts = await api('GET', '/debts?status=active') || [];
-
-  // Har bir qarzdor uchun qarzlarini guruhlash
-  const byDebtor = {};
-  allDebts.forEach(d => {
-    if (!byDebtor[d.debtor_id]) byDebtor[d.debtor_id] = [];
-    byDebtor[d.debtor_id].push(d);
-  });
-
-  const tbody = document.getElementById('debtors-tbody');
-  if (!tbody) return;
-
-  if ((dlist||[]).length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Qarzdorlar yo\'q</td></tr>';
+// ── Kartalar render ──────────────────────────────────────────
+function renderDebtorCards(dlist) {
+  const grid = document.getElementById('debtors-cards');
+  if (!grid) return;
+  if (!dlist.length) {
+    grid.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:40px;grid-column:1/-1">Qarzdorlar yo\'q</div>';
     return;
   }
-
-  let rows = '';
-  (dlist||[]).forEach(d => {
-    const debts = byDebtor[d.id] || [];
-    const bg = d.total_debt > 200000 ? '#fff5f5' : d.total_debt > 50000 ? '#fffbeb' : '#f0fdf4';
+  grid.innerHTML = dlist.map(d => {
+    const pct_paid = d.total_debt > 0 ? 0 : 100;
+    const color = d.total_debt > 200000 ? '#dc2626' : d.total_debt > 50000 ? '#f59e0b' : '#16a34a';
     const border = d.total_debt > 200000 ? '#fca5a5' : d.total_debt > 50000 ? '#fcd34d' : '#86efac';
-
-    if (debts.length === 0) {
-      // Qarz yo'q
-      rows += `
-      <tr style="background:${bg}">
-        <td style="border-left:3px solid ${border}">
-          <div style="font-weight:600">${d.full_name}</div>
-          <div style="font-size:11px;color:#64748b">${d.phone||'—'}</div>
-          ${d.notes ? `<div style="font-size:10px;color:#94a3b8">${d.notes}</div>` : ''}
-        </td>
-        <td style="color:#94a3b8;font-size:12px">Qarz yo'q</td>
-        <td style="text-align:right;color:#16a34a;font-weight:600">0 so'm</td>
-        <td style="text-align:right;color:#16a34a">0 so'm</td>
-        <td style="text-align:center;font-size:11px;color:#16a34a">✅</td>
-        <td>
-          <button class="btn btn-blue" style="padding:3px 10px;font-size:11px"
-            onclick="addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')">+ Qarz</button>
-          <button class="btn btn-gray" style="padding:3px 8px;font-size:11px;margin-left:3px"
-            onclick="debtorCard('${d.id}')">👁</button>
-        </td>
-      </tr>`;
-      return;
-    }
-
-    // Har bir qarz alohida qator
-    debts.forEach((debt, idx) => {
-      const pct = debt.amount > 0 ? Math.round(debt.paid_amount / debt.amount * 100) : 100;
-      const pctColor = pct >= 80 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
-
-      rows += `
-      <tr style="background:${bg}">
-        ${idx === 0 ? `
-        <td rowspan="${debts.length}" style="vertical-align:top;padding-top:10px;border-left:3px solid ${border}">
-          <div style="font-weight:700">${d.full_name}</div>
-          <div style="font-size:11px;color:#64748b">${d.phone||'—'}</div>
-          ${d.notes ? `<div style="font-size:10px;color:#94a3b8">${d.notes}</div>` : ''}
-          <div style="margin-top:6px">
-            <div style="font-size:10px;color:#64748b">Jami qarz:</div>
-            <div style="font-weight:700;color:#dc2626;font-size:14px">${fmt(d.total_debt)}</div>
-          </div>
-        </td>` : ''}
-        <td style="font-size:12px;color:#374151">
-          ${debt.description||'Nasiya'}
-          ${debt.due_date ? `<div style="font-size:10px;color:#94a3b8">📅 ${debt.due_date}</div>` : ''}
-        </td>
-        <td style="text-align:right;font-size:13px">${fmt(debt.amount)}</td>
-        <td style="text-align:right;font-weight:700;color:${debt.remaining > 0 ? '#dc2626' : '#16a34a'}">
-          ${fmt(debt.remaining)}
-        </td>
-        <td style="text-align:center">
-          <div style="font-size:11px;font-weight:600;color:${pctColor}">${pct}%</div>
-          <div style="height:4px;background:#f1f5f9;border-radius:2px;margin-top:2px;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:2px"></div>
-          </div>
-        </td>
-        <td>
-          ${debt.remaining > 0 ? `
-          <div style="display:flex;gap:3px;flex-wrap:wrap">
-            <button class="btn btn-green" style="padding:3px 8px;font-size:11px"
-              onclick="quickPayDebt('${debt.id}','${d.full_name.replace(/'/g,"\\'")}',${debt.remaining})">
-              💵 To'lash
-            </button>
-            <button class="btn btn-gray" style="padding:3px 6px;font-size:11px"
-              onclick="customPayDebt('${debt.id}','${d.full_name.replace(/'/g,"\\'")}',${debt.remaining})">
-              ⚙️
-            </button>
-            ${idx === 0 ? `
-            <button class="btn btn-blue" style="padding:3px 6px;font-size:11px"
-              onclick="addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')">+</button>
-            ` : ''}
-          </div>` : `
-          <span class="badge badge-green" style="font-size:10px">✅ Yopildi</span>
-          ${idx === 0 ? `
-          <button class="btn btn-blue" style="padding:2px 6px;font-size:10px;margin-left:2px"
-            onclick="addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')">+</button>
-          ` : ''}
-          `}
-        </td>
-      </tr>`;
-    });
-  });
-
-  tbody.innerHTML = rows;
+    return `
+    <div onclick="openDebtorDetail('${d.id}')"
+      style="background:#fff;border-radius:12px;padding:14px;border:1px solid #e2e8f0;
+             border-left:4px solid ${border};cursor:pointer;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.05)"
+      onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'"
+      onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.05)'">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-weight:700;font-size:14px">${d.full_name}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">📞 ${d.phone||'—'}</div>
+          ${d.notes ? `<div style="font-size:10px;color:#94a3b8;margin-top:1px">${d.notes}</div>` : ''}
+        </div>
+        <span class="badge ${d.total_debt>0?'badge-red':'badge-green'}" style="font-size:10px">
+          ${d.debt_count||0} qarz
+        </span>
+      </div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:10px;color:#64748b">Qoldiq qarz</div>
+          <div style="font-size:20px;font-weight:800;color:${color}">${fmt(d.total_debt)}</div>
+        </div>
+        <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+          <button class="btn btn-green" style="padding:5px 12px;font-size:12px"
+            onclick="addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')"
+            title="Nasiya qo'shish">+ Nasiya</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-// ── Qidirish ─────────────────────────────────────────────────
 function filterDebtors(q) {
   const filtered = q
     ? (window._debtorsList||[]).filter(d =>
         d.full_name.toLowerCase().includes(q.toLowerCase()) ||
         (d.phone||'').includes(q))
     : window._debtorsList||[];
-  renderDebtorsTable(filtered);
+  renderDebtorCards(filtered);
 }
 
-// ── Tez to'lash (confirm dialog) ─────────────────────────────
-async function quickPayDebt(debtId, name, remaining) {
-  if (!confirm(`${name}\n\nTo'liq summa: ${fmt(remaining)}\n\nTo'liq to'lansinmi?`)) return;
-  const res = await api('POST', `/debts/${debtId}/pay`, {
-    amount: remaining,
-    payment_method: 'cash',
-    note: "To'liq to'landi",
-  });
-  if (res.error) { toast(res.error, 'err'); return; }
-  toast(`✅ ${res.message || fmt(remaining) + " to'landi!"}`);
-  printDebtPayReceipt(res);
-  debtors();
-}
+// ── Qarzdor detail modali ─────────────────────────────────────
+async function openDebtorDetail(did) {
+  const d = await api('GET', `/debtors/${did}`);
+  if (d.error) { toast(d.error,'err'); return; }
 
-// ── Miqdor tanlash bilan to'lash ─────────────────────────────
-function customPayDebt(debtId, name, remaining) {
+  const debts = d.debts||[];
+  const active = debts.filter(x=>x.status==='active');
+  const paid   = debts.filter(x=>x.status!=='active');
+
+  const debtRows = active.map(debt => {
+    const p = debt.amount>0 ? Math.round(_flt(debt.paid_amount)/_flt(debt.amount)*100) : 100;
+    return `
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid #f59e0b">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:13px">${debt.description||'Nasiya'}</div>
+          ${debt.due_date?`<div style="font-size:10px;color:#94a3b8">📅 ${debt.due_date}</div>`:''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:#64748b">Qoldiq</div>
+          <div style="font-weight:800;color:#dc2626;font-size:16px">${fmt(debt.remaining)}</div>
+          <div style="font-size:10px;color:#64748b">Jami: ${fmt(debt.amount)}</div>
+        </div>
+      </div>
+      <div class="progress-bar" style="margin:6px 0">
+        <div class="progress-fill" style="width:${p}%;background:${p>80?'#16a34a':'#f59e0b'}"></div>
+      </div>
+      <button class="btn btn-green" style="width:100%;padding:7px;font-size:13px;margin-top:4px"
+        onclick="openPaymentModal('${debt.id}','${d.full_name.replace(/'/g,"\\'")}',${_flt(debt.remaining)})">
+        💵 To'lash
+      </button>
+    </div>`;
+  }).join('');
+
+  const paidRows = paid.length ? `
+    <div style="margin-top:8px;font-size:11px;color:#94a3b8">
+      ✅ ${paid.length} ta qarz yopilgan
+    </div>` : '';
+
   document.body.insertAdjacentHTML('beforeend', `
-  <div class="modal-bg" id="custom-pay-modal">
-    <div class="modal">
+  <div class="modal-bg" id="debtor-detail-modal">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <div>
+          <h3>👤 ${d.full_name}</h3>
+          <div style="font-size:12px;color:#64748b">📞 ${d.phone||'—'} ${d.address?'| 📍'+d.address:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="text-align:right">
+            <div style="font-size:10px;color:#64748b">Jami qarz</div>
+            <div style="font-size:20px;font-weight:800;color:#dc2626">${fmt(d.total_debt)}</div>
+          </div>
+          <button class="btn btn-gray" onclick="document.getElementById('debtor-detail-modal').remove()">✕</button>
+        </div>
+      </div>
+      <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-blue" style="flex:1"
+            onclick="document.getElementById('debtor-detail-modal').remove();addDebtModal('${d.id}','${d.full_name.replace(/'/g,"\\'")}')">
+            + Nasiya qo'shish
+          </button>
+          <button class="btn btn-gray" onclick="printDebtorCard('${d.id}')">🖨️</button>
+        </div>
+        ${active.length ? debtRows : '<div style="text-align:center;color:#94a3b8;padding:16px">Faol qarz yo\'q</div>'}
+        ${paidRows}
+      </div>
+    </div>
+  </div>`);
+  window._currentDebtor = d;
+}
+
+// ── To'lov modali (qisman/to'liq) ────────────────────────────
+function openPaymentModal(debtId, name, remaining) {
+  // Oldingi to'lov modalini yopish
+  document.getElementById('debtor-detail-modal')?.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-bg" id="pay-debt-modal">
+    <div class="modal" style="max-width:400px">
       <div class="modal-header">
         <h3>💵 To'lov — ${name}</h3>
-        <button class="btn btn-gray" onclick="document.getElementById('custom-pay-modal').remove()">✕</button>
+        <button class="btn btn-gray" onclick="closePay()">✕</button>
       </div>
       <div class="modal-body">
-        <div style="background:#fef9c3;border-radius:10px;padding:14px;text-align:center;margin-bottom:14px">
+        <!-- Qoldiq -->
+        <div style="background:#fef9c3;border-radius:10px;padding:14px;text-align:center;margin-bottom:16px">
           <div style="font-size:11px;color:#a16207">Qoldiq qarz</div>
-          <div style="font-size:28px;font-weight:800;color:#dc2626">${fmt(remaining)}</div>
+          <div style="font-size:32px;font-weight:800;color:#dc2626">${fmt(remaining)}</div>
         </div>
+
+        <!-- To'lov turi -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+          <button id="btn-partial" onclick="setPayType('partial')"
+            style="padding:10px;border:2px solid #2563eb;border-radius:8px;background:#eff6ff;
+                   color:#2563eb;cursor:pointer;font-size:13px;font-weight:600">
+            🔄 Qisman
+          </button>
+          <button id="btn-full" onclick="setPayType('full')"
+            style="padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;
+                   color:#374151;cursor:pointer;font-size:13px;font-weight:500">
+            ✅ To'liq
+          </button>
+        </div>
+
+        <!-- Miqdor -->
+        <div class="form-row" id="partial-amount-row">
+          <div>
+            <label>To'lov miqdori (so'm)</label>
+            <input id="pay-amount" type="number" min="1" max="${remaining}"
+              value="${remaining}"
+              oninput="updatePayChange(${remaining})"
+              style="font-size:18px;font-weight:700;text-align:right">
+          </div>
+        </div>
+
+        <!-- Tez miqdorlar -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="quick-amounts">
+          ${[25,50,75,100].map(p => {
+            const amt = Math.round(remaining * p / 100);
+            return `<button onclick="document.getElementById('pay-amount').value=${amt};updatePayChange(${remaining})"
+              style="padding:4px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;
+                     font-size:11px;cursor:pointer">${p}%</button>`;
+          }).join('')}
+          <button onclick="document.getElementById('pay-amount').value=${remaining};updatePayChange(${remaining})"
+            style="padding:4px 10px;border:1px solid #16a34a;border-radius:6px;background:#f0fdf4;
+                   color:#16a34a;font-size:11px;cursor:pointer;font-weight:600">To'liq</button>
+        </div>
+
+        <!-- To'lov usuli -->
         <div class="form-row cols-2">
           <div>
-            <label>To'lov miqdori *</label>
-            <input id="cpay-amount" type="number" min="1" max="${remaining}" value="${remaining}" autofocus>
-          </div>
-          <div>
             <label>To'lov usuli</label>
-            <select id="cpay-method">
+            <select id="pay-method">
               <option value="cash">💵 Naqd</option>
               <option value="uzcard">💳 Uzcard</option>
               <option value="humo">💳 Humo</option>
@@ -1660,29 +1776,83 @@ function customPayDebt(debtId, name, remaining) {
               <option value="click">📱 Click</option>
             </select>
           </div>
+          <div>
+            <label>Izoh</label>
+            <input id="pay-note" placeholder="Naqd...">
+          </div>
         </div>
-        <div class="form-row">
-          <div><label>Izoh</label><input id="cpay-note" placeholder="Naqd to'ladi..."></div>
+
+        <!-- Qaytim -->
+        <div id="pay-change-row" style="display:none;background:#f0fdf4;border-radius:8px;
+             padding:10px;margin-top:6px;display:flex;justify-content:space-between">
+          <span style="color:#15803d;font-weight:600">Qaytim:</span>
+          <span id="pay-change-val" style="color:#15803d;font-weight:700"></span>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-gray" onclick="document.getElementById('custom-pay-modal').remove()">Bekor</button>
-        <button class="btn btn-green" onclick="processCustomPay('${debtId}')">✅ To'lash</button>
+        <button class="btn btn-gray" onclick="closePay()">Bekor</button>
+        <button class="btn btn-green" style="padding:10px 28px;font-size:14px"
+          onclick="submitPayment('${debtId}',${remaining})">
+          ✅ To'lash
+        </button>
       </div>
     </div>
   </div>`);
+
+  window._payType = 'partial';
 }
 
-async function processCustomPay(debtId) {
-  const amount = parseFloat(document.getElementById('cpay-amount').value);
-  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!', 'err'); return; }
+function closePay() {
+  document.getElementById('pay-debt-modal')?.remove();
+  debtors();
+}
+
+function setPayType(type) {
+  window._payType = type;
+  const btnP = document.getElementById('btn-partial');
+  const btnF = document.getElementById('btn-full');
+  const inp  = document.getElementById('pay-amount');
+  if (type === 'full') {
+    btnF.style.cssText = 'padding:10px;border:2px solid #16a34a;border-radius:8px;background:#f0fdf4;color:#16a34a;cursor:pointer;font-size:13px;font-weight:600';
+    btnP.style.cssText = 'padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;color:#374151;cursor:pointer;font-size:13px;font-weight:500';
+    inp.style.opacity  = '0.5';
+    inp.disabled       = true;
+  } else {
+    btnP.style.cssText = 'padding:10px;border:2px solid #2563eb;border-radius:8px;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:13px;font-weight:600';
+    btnF.style.cssText = 'padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;color:#374151;cursor:pointer;font-size:13px;font-weight:500';
+    inp.style.opacity  = '1';
+    inp.disabled       = false;
+  }
+}
+
+function updatePayChange(remaining) {
+  const amt = parseFloat(document.getElementById('pay-amount')?.value)||0;
+  const change = amt - remaining;
+  const box = document.getElementById('pay-change-row');
+  if (box) {
+    box.style.display = change > 0 ? 'flex' : 'none';
+    const v = document.getElementById('pay-change-val');
+    if (v) v.textContent = fmt(change);
+  }
+}
+
+async function submitPayment(debtId, remaining) {
+  let amount;
+  if (window._payType === 'full') {
+    amount = remaining;
+  } else {
+    amount = parseFloat(document.getElementById('pay-amount')?.value)||0;
+    if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!','err'); return; }
+    if (amount > remaining) amount = remaining;
+  }
+
   const res = await api('POST', `/debts/${debtId}/pay`, {
     amount,
-    payment_method: document.getElementById('cpay-method').value,
-    note: document.getElementById('cpay-note').value || "To'lov",
+    payment_method: document.getElementById('pay-method')?.value || 'cash',
+    note: document.getElementById('pay-note')?.value || '',
   });
-  if (res.error) { toast(res.error, 'err'); return; }
-  document.getElementById('custom-pay-modal')?.remove();
+  if (res.error) { toast(res.error,'err'); return; }
+  document.getElementById('pay-debt-modal')?.remove();
   toast(`✅ ${res.message}`);
   printDebtPayReceipt(res);
   debtors();
@@ -1698,17 +1868,14 @@ function addDebtorModal() {
         <button class="btn btn-gray" onclick="document.getElementById('add-debtor-modal').remove()">✕</button>
       </div>
       <div class="modal-body">
-        <div class="form-row">
-          <div><label>Ism familiya *</label>
-            <input id="nd-name" placeholder="Karimov Botir" autofocus></div>
-        </div>
+        <div class="form-row"><div><label>Ism familiya *</label>
+          <input id="nd-name" placeholder="Karimov Botir" autofocus></div></div>
         <div class="form-row cols-2">
           <div><label>Telefon</label><input id="nd-phone" placeholder="+998901234567"></div>
           <div><label>Manzil</label><input id="nd-address" placeholder="Chilonzor 5"></div>
         </div>
-        <div class="form-row">
-          <div><label>Izoh</label><input id="nd-notes" placeholder="Doimiy mijoz..."></div>
-        </div>
+        <div class="form-row"><div><label>Izoh</label>
+          <input id="nd-notes" placeholder="Doimiy mijoz..."></div></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-gray" onclick="document.getElementById('add-debtor-modal').remove()">Bekor</button>
@@ -1720,43 +1887,39 @@ function addDebtorModal() {
 
 async function saveDebtor() {
   const name = document.getElementById('nd-name').value.trim();
-  if (!name) { toast('Ism kiritilishi shart!', 'err'); return; }
-  const res = await api('POST', '/debtors', {
+  if (!name) { toast('Ism kiritilishi shart!','err'); return; }
+  const res = await api('POST','/debtors',{
     full_name: name,
     phone:    document.getElementById('nd-phone').value,
     address:  document.getElementById('nd-address').value,
     notes:    document.getElementById('nd-notes').value,
   });
-  if (res.error) { toast(res.error, 'err'); return; }
+  if (res.error) { toast(res.error,'err'); return; }
   document.getElementById('add-debtor-modal')?.remove();
   toast(`✅ ${res.full_name} qo'shildi!`);
   debtors();
 }
 
-// ── Yangi qarz qo'shish ──────────────────────────────────────
+// ── Nasiya qo'shish ──────────────────────────────────────────
 function addDebtModal(did, name) {
   document.body.insertAdjacentHTML('beforeend', `
   <div class="modal-bg" id="add-debt-modal">
     <div class="modal">
       <div class="modal-header">
-        <h3>💳 Nasiya qo'shish — ${name}</h3>
+        <h3>💳 Nasiya — ${name}</h3>
         <button class="btn btn-gray" onclick="document.getElementById('add-debt-modal').remove()">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-row cols-2">
-          <div><label>Qarz miqdori (so'm) *</label>
+          <div><label>Miqdor (so'm) *</label>
             <input id="debt-amount" type="number" min="1" placeholder="50000" autofocus></div>
           <div><label>Avans to'lov</label>
-            <input id="debt-paid" type="number" min="0" value="0" placeholder="0"></div>
+            <input id="debt-paid" type="number" min="0" value="0"></div>
         </div>
-        <div class="form-row">
-          <div><label>Tavsif</label>
-            <input id="debt-desc" placeholder="Oziq-ovqat xaridi..."></div>
-        </div>
-        <div class="form-row">
-          <div><label>Muddat (ixtiyoriy)</label>
-            <input id="debt-due" type="date"></div>
-        </div>
+        <div class="form-row"><div><label>Tavsif</label>
+          <input id="debt-desc" placeholder="Oziq-ovqat xaridi..."></div></div>
+        <div class="form-row"><div><label>Muddat (ixtiyoriy)</label>
+          <input id="debt-due" type="date"></div></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-gray" onclick="document.getElementById('add-debt-modal').remove()">Bekor</button>
@@ -1768,68 +1931,71 @@ function addDebtModal(did, name) {
 
 async function saveDebt(did) {
   const amount = parseFloat(document.getElementById('debt-amount').value);
-  if (!amount || amount <= 0) { toast('Miqdor kiritilishi shart!', 'err'); return; }
-  const res = await api('POST', '/debts', {
+  if (!amount||amount<=0) { toast('Miqdor kiritilishi shart!','err'); return; }
+  const res = await api('POST','/debts',{
     debtor_id:   did,
     amount,
-    paid_amount: parseFloat(document.getElementById('debt-paid').value) || 0,
-    description: document.getElementById('debt-desc').value || 'Nasiya',
-    due_date:    document.getElementById('debt-due').value || null,
+    paid_amount: parseFloat(document.getElementById('debt-paid').value)||0,
+    description: document.getElementById('debt-desc').value||'Nasiya',
+    due_date:    document.getElementById('debt-due').value||null,
   });
-  if (res.error) { toast(res.error, 'err'); return; }
+  if (res.error) { toast(res.error,'err'); return; }
   document.getElementById('add-debt-modal')?.remove();
   toast(`✅ ${fmt(res.remaining)} qarz qo'shildi!`);
   debtors();
 }
 
-// ── Qarzdor hisobi cheki ──────────────────────────────────────
+// ── Karizdor cheki ────────────────────────────────────────────
 async function debtorCard(did) {
   const d = await api('GET', `/debtors/${did}`);
-  if (d.error) { toast(d.error, 'err'); return; }
+  if (d.error) { toast(d.error,'err'); return; }
   const rows = (d.debts||[]).map(debt =>
     `<div class="r-row">
-      <span>${debt.description||'Qarz'}</span>
-      <span style="color:${debt.remaining>0?'#dc2626':'#16a34a'};font-weight:600">${fmt(debt.remaining)}</span>
+      <span>${debt.description||'Nasiya'}</span>
+      <span style="color:${_flt(debt.remaining)>0?'#dc2626':'#16a34a'};font-weight:600">${fmt(debt.remaining)}</span>
     </div>`
   ).join('');
   const html = `<div class="receipt-paper">
-    <div class="r-title">${getShopName()} — Nasiya Hisobi</div>
+    <div class="r-title">${getShopName()}</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Mijoz:</span><span><b>${d.full_name}</b></span></div>
     <div class="r-row"><span>Tel:</span><span>${d.phone||'—'}</span></div>
-    <div class="r-row"><span>Manzil:</span><span>${d.address||'—'}</span></div>
     <div class="r-divider"></div>
-    ${rows || '<div style="text-align:center;color:#94a3b8">Qarz yo\'q</div>'}
+    ${rows||'<div style="text-align:center;color:#94a3b8">Qarz yo\'q</div>'}
     <div class="r-divider"></div>
-    <div class="r-row r-total"><span>JAMI QARZ:</span><span style="color:#dc2626">${fmt(d.total_debt)}</span></div>
+    <div class="r-row r-total"><span>JAMI:</span><span style="color:#dc2626">${fmt(d.total_debt)}</span></div>
     <div class="r-divider"></div>
-    <div style="text-align:center;font-size:11px">Sana: ${new Date().toLocaleDateString('uz-UZ')}</div>
+    <div style="text-align:center;font-size:11px">${new Date().toLocaleDateString('uz-UZ')}</div>
   </div>`;
+  document.getElementById('debtor-detail-modal')?.remove();
   showPrintModal(html, `${d.full_name} — Nasiya Hisobi`);
 }
 
-// ── Nasiya to'lov cheki ───────────────────────────────────────
+async function printDebtorCard(did) { await debtorCard(did); }
+
+// ── To'lov cheki ──────────────────────────────────────────────
 function printDebtPayReceipt(res) {
-  if (!res || !res.debt) return;
-  const debt   = res.debt   || {};
-  const debtor = res.debtor || {};
+  if (!res||!res.debt) return;
+  const debt   = res.debt||{};
+  const debtor = res.debtor||{};
   const html = `<div class="receipt-paper">
     <div class="r-title">${getShopName()} — Nasiya To'lov</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Chek:</span><span>${res.receipt_number||''}</span></div>
-    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
+    <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')} ${new Date().toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Mijoz:</span><span><b>${debtor.full_name||'—'}</b></span></div>
     <div class="r-row"><span>Tel:</span><span>${debtor.phone||'—'}</span></div>
     <div class="r-divider"></div>
     <div class="r-row r-total"><span>TO'LANDI:</span><span style="color:#16a34a">+${fmt(res.paid||0)}</span></div>
-    <div class="r-row"><span>Qoldiq:</span><span style="color:#dc2626">${fmt(debt.remaining||0)}</span></div>
+    <div class="r-row"><span>Qoldiq:</span><span style="color:#dc2626">${fmt(_flt(debt.remaining)||0)}</span></div>
     <div class="r-divider"></div>
     <div style="text-align:center">${res.message||''}</div>
-    <div style="text-align:center;margin-top:6px">${getReceiptFooter()}</div>
+    <div style="text-align:center;margin-top:4px;font-size:11px">${getReceiptFooter()}</div>
   </div>`;
   showPrintModal(html, "Nasiya To'lov Cheki");
 }
+
 
 
 // Chekni ekranda ko'rsatish va chop etish

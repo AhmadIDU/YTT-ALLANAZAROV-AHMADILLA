@@ -190,8 +190,9 @@ CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL,
     barcode VARCHAR(100), unit VARCHAR(20) DEFAULT 'pcs',
     price DECIMAL(15,2) DEFAULT 0, cost_price DECIMAL(15,2) DEFAULT 0,
-    stock_qty DECIMAL(15,3) DEFAULT 0, is_active TINYINT DEFAULT 1, created_at VARCHAR(50),
-    image_url TEXT
+    stock_qty DECIMAL(15,3) DEFAULT 0, is_active TINYINT DEFAULT 1,
+    created_at VARCHAR(50),
+    image_url MEDIUMTEXT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS sales (
     id VARCHAR(36) PRIMARY KEY, receipt_number VARCHAR(50),
@@ -280,14 +281,18 @@ def _init_mysql():
                 if "1050" in str(e): pass  # jadval mavjud
                 else: print(f"  ⚠️  SQL: {e}")
 
-    # image_url ustunini qo'shish (agar yo'q bo'lsa)
+    # image_url ustunini qo'shish yoki MEDIUMTEXT ga o'zgartirish
     try:
-        c.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
+        c.execute("ALTER TABLE products ADD COLUMN image_url MEDIUMTEXT")
         conn.commit()
-        print("  ✅ image_url ustuni qo'shildi")
+        print("  ✅ image_url ustuni qo'shildi (MEDIUMTEXT)")
     except Exception as e:
         if "1060" in str(e) or "Duplicate" in str(e):
-            pass  # allaqachon mavjud
+            # Mavjud — MEDIUMTEXT ga o'zgartirish
+            try:
+                c.execute("ALTER TABLE products MODIFY COLUMN image_url MEDIUMTEXT")
+                conn.commit()
+            except: pass
         else:
             print(f"  ⚠️  image_url: {e}")
 
@@ -601,12 +606,14 @@ def handle_api(method, path, body, params):
         # create
         if method == "POST" and len(parts) == 3:
             pid = str(uuid.uuid4())
+            # base64 rasm hajmini tekshirish (max 2MB)
+            img = body.get("image_url") or None
+            if img and len(img) > 2 * 1024 * 1024:
+                return _err("Rasm hajmi 2MB dan oshmasligi kerak", 400)
             conn.execute("INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?,?)",
                 (pid, body.get("name",""), body.get("barcode",""),
                  body.get("unit","pcs"), body.get("price",0),
-                 body.get("cost_price",0), 0, _now(),
-                 body.get("image_url") or None))
-            conn.commit()
+                 body.get("cost_price",0), 0, _now(), img))
             conn.commit()
             row = dict(conn.execute("SELECT * FROM products WHERE id=?",(pid,)).fetchone())
             conn.close()
