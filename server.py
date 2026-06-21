@@ -288,160 +288,88 @@ def _init_sqlite():
 
 
 def _seed_sqlite(c):
-    """SQLite demo ma'lumotlari"""
-    import sqlite3
+    """Real tovarlar — Отгрузка No9315 dan"""
     now = _now()
     if c.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
         for p in [
-            # ── Oziq-ovqat asosiy ──────────────────────────────────────
-            ("Non Obi 500g",          "4600001","pcs",  3500,  2200, 120),
-            ("Sut 1L Nestle",          "4600002","l",    9800,  7500,  45),
-            ("Shakar 1kg",             "4600003","kg",  12000,  9000,  80),
-            ("Tuxum 10 dona",          "4600004","pcs", 22000, 17000,  30),
-            ("Coca-Cola 0.5L",         "4600005","pcs",  8500,  6000, 200),
-            ("Makaron 500g",           "4600006","pcs",  7000,  5200,  60),
-            ("Yog Oltin 1L",           "4600007","l",   28000, 22000,  25),
-            ("Guruch 1kg",             "4600008","kg",  14000, 10500,  90),
-            ("Mol gusht 1kg",          "4600009","kg",  75000, 60000,  15),
-            ("Sabzi 1kg",              "4600010","kg",   6000,  4000, 100),
-            ("Piyoz 1kg",              "4600011","kg",   4500,  3000, 150),
-            ("Pomidor 1kg",            "4600012","kg",   8000,  5500,  70),
-            ("Kartoshka 1kg",          "4600013","kg",   5000,  3500, 200),
-            ("Choy Lipton 100g",       "4600014","pcs", 18000, 13000,  40),
-            ("Qand 1kg",               "4600015","kg",  16000, 12000,  55),
-            # ── Optom tovarlar (Отгрузка №9315) ───────────────────────
-            ("Tilton Kachok 0.5l Choy",      "4601001","pcs", 16000, 11000,  10),
-            ("APREL KAITA 0.5l Shisha",      "4601002","pcs", 10800,  7500,  12),
-            ("Azelit Grass antilit 600ml",   "4601003","pcs", 23000, 16000,   2),
-            ("Novot Eryon Shirin tola kg",   "4601004","pcs",142000,100000,   5),
-            ("Olivia Sovun 140 gr",          "4601005","pcs",150000,110000,   4),
-            ("Flecha Aldar Zira Choy 350g",  "4601006","pcs",  6800,  4800,  18),
-            ("Naturella Zelyoniy Garox 400g","4601007","pcs", 24000, 17000,   3),
-            ("Oq Qand 10kg",                 "4601008","kg",   7000,  5000,  15),
-            ("Bavi 70g",                     "4601009","pcs",  6600,  4500,  24),
-            ("Patr Pichin 4kg karobka",      "4601010","box",130000, 95000,   2),
-            ("Angel 100gr Xamirturish",      "4601011","box",  5300,  3800,  20),
-            ("Orbit Sadich 408g",            "4601012","pcs", 58000, 42000,   1),
-            ("Malyuk Standart 2 300g",       "4601013","pcs", 59000, 43000,   2),
-            ("Nutriak Kok 300g",             "4601014","pcs", 58000, 42000,   4),
-            ("TWO BITE PICHIN 2kg karobka",  "4601015","box", 52000, 38000,   2),
-            ("Ole pecheni 3.5kg karobka",    "4601016","box",133000, 98000,   1),
-            ("Yubleyni Vafli 3kg assarti",   "4601017","box", 72000, 53000,   2),
-            ("Shkoladli Vafli 2kg karobka",  "4601018","box", 96000, 70000,   1),
-            ("Tamat orikzor mayda 0.43ml",   "4601019","pcs", 15000, 10500,  20),
-            ("BUMAGA 777 arzon",             "4601020","pcs",  3500,  2500,  30),
-            ("Kristal Gel 500ml",            "4601021","pcs",  9000,  6500,   2),
-            ("Mico food kukuruz 1kg",        "4601022","kg",  38000, 27000, 220),
-            ("Chortoq 0.5l Shisha Choy",     "4601023","pcs", 16000, 11000,  10),
-            ("Angel Xamirturish 100g yirik", "4601024","pcs",  5300,  3800,  20),
+            # №  Nomi                              barcode      unit    narx   tannarx  zaxira
+            ("Tilton/Kachok 0.5l Choy",          "4601001",  "pcs",  16000,  12000,   10),
+            ("APREL KAITA 0.5l Shisha",           "4601002",  "pcs",  10800,   8000,   12),
+            ("Azelit Grass antilit 600ml",         "4601003",  "pcs",  23000,  17000,    2),
+            ("Novot Eryon Shirin tola 1kg",        "4601004",  "kg",  142000, 100000,    5),
+            ("Olivia Sovun 140gr",                 "4601005",  "pcs", 150000, 110000,    4),
+            ("Chortoq 0.5l Shisha",                "4601006",  "pcs",  16000,  11000,   18),
+            ("APREL KAITA 900G",                   "4601007",  "pcs",  23000,  17000,    5),
+            ("Azelit Grass 600ml",                 "4601008",  "pcs",  23000,  16000,    2),
+            ("Novot Eryon 1kg",                    "4601009",  "kg",  142000,  99000,    5),
+            ("Olivia Aldar Zira Choy 350g",        "4601010",  "pcs",   6800,   4800,   18),
+            ("Naturella Zelyoniy Garox 400g",      "4601011",  "pcs",  24000,  17000,    3),
+            ("Oq Qand 10kg",                       "4601012",  "kg",    7000,   5000,   15),
+            ("Bavi 70g",                           "4601013",  "pcs",   6600,   4500,   24),
+            ("Patr Pichin 4kg (karobka)",          "4601014",  "box", 130000,  95000,    2),
+            ("Angel 100gr Xamirturish (10talik)",  "4601015",  "box",   5300,   3800,   20),
+            ("Orbit Sadich 408g",                  "4601016",  "pcs",  58000,  42000,    1),
+            ("Malyuk Standart 2 300g",             "4601017",  "pcs",  59000,  43000,    2),
+            ("Nutriak Kok 300g 2",                 "4601018",  "pcs",  58000,  42000,    4),
+            ("TWO BITE PICHIN 2kg (karobka)",      "4601019",  "box",  52000,  38000,    2),
+            ("Ole pecheni 3.5kg (karobka)",        "4601020",  "box", 133000,  98000,    1),
+            ("Yubleyni Vafli 3kg assarti",         "4601021",  "box",  72000,  53000,    2),
+            ("5+ Shkoladli Vafli 2kg (karobka)",  "4601022",  "box",  96000,  70000,    1),
+            ("Tamat o'rikzor mayda 0.43ml",       "4601023",  "pcs",  15000,  10500,   20),
+            ("BUMAGA 777 arzon",                   "4601024",  "pcs",   3500,   2500,   30),
+            ("Kristal Gel 500ml Qimmat",           "4601025",  "pcs",   9000,   6500,    2),
+            ("Mico food kukuruz 1kg",              "4601026",  "kg",   38000,  27000,  220),
         ]:
             c.execute("INSERT INTO products VALUES (?,?,?,?,?,?,?,1,?)",
                 (str(uuid.uuid4()),p[0],p[1],p[2],p[3],p[4],p[5],now))
 
-    if c.execute("SELECT COUNT(*) FROM sales").fetchone()[0] == 0:
-        for total, method in [
-            (35000,"cash"),(98500,"payme"),(22000,"cash"),
-            (150000,"uzcard"),(47500,"cash"),(63000,"click"),
-            (28000,"cash"),(112000,"uzcard"),(18500,"cash"),(75000,"humo"),
-        ]:
-            c.execute("INSERT INTO sales VALUES (?,?,?,?,?,?,?)",
-                (str(uuid.uuid4()),_receipt(),"Demo Kassir",total,method,"synced",now))
-
-    if c.execute("SELECT COUNT(*) FROM farms").fetchone()[0] == 0:
-        f1,f2,f3 = str(uuid.uuid4()),str(uuid.uuid4()),str(uuid.uuid4())
-        for fid,name,owner,phone,address,region,ftype,debt,supplied in [
-            (f1,"Bahor Fermer Xo'jaligi","Toshmatov Behruz","+998901112233","Sirdaryo","Sirdaryo","don",320000,1850000),
-            (f2,"Yashil Vodiy FX","Rahimov Akbar","+998912223344","Farg'ona","Farg'ona","sabzavot",150000,970000),
-            (f3,"Nur Agro FX","Karimov Sanjar","+998923334455","Toshkent","Toshkent","chorva",0,540000),
-        ]:
-            c.execute("INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,notes,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,1,?)",
-                (fid,name,owner,phone,address,region,ftype,debt,supplied,"",now))
-        for fid,amt,paid,desc in [(f1,500000,180000,"Urug' va o'g'it"),(f2,150000,0,"Jihoz")]:
-            c.execute("INSERT INTO farm_debts VALUES (?,?,?,?,?,?,?,?,?)",
-                (str(uuid.uuid4()),fid,amt,paid,amt-paid,desc,"active",None,now))
-
-    if c.execute("SELECT COUNT(*) FROM debtors").fetchone()[0] == 0:
-        d1,d2,d3,d4 = [str(uuid.uuid4()) for _ in range(4)]
-        for did,name,phone,addr,debt,note in [
-            (d1,"Karimov Botir","+998901234567","Chilonzor 5",150000,"Doimiy mijoz"),
-            (d2,"Rahimova Malika","+998912345678","Yunusobod 12",85000,""),
-            (d3,"Toshmatov Sardor","+998923456789","Mirzo Ulugbek 3",320000,"Oylik to'laydi"),
-            (d4,"Usmonov Jasur","+998934567890","Shayxontohur 7",0,""),
-        ]:
-            c.execute("INSERT INTO debtors VALUES (?,?,?,?,?,?,?)",
-                (did,name,phone,addr,debt,now,note))
-        for did,total,paid,desc in [
-            (d1,150000,0,"Oziq-ovqat mahsulotlari"),
-            (d2,85000,0,"Kunlik xarid"),
-            (d3,500000,180000,"Oylik zakaz"),
-        ]:
-            c.execute("INSERT INTO debts VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (str(uuid.uuid4()),did,None,total,paid,total-paid,desc,"active",None,now))
-
 
 def _seed_mysql(c, conn):
-    """MySQL demo ma'lumotlari"""
+    """Real tovarlar MySQL uchun"""
     now = _now()
-
-    # dictionary=True cursor yaratamiz
     c = conn.cursor(dictionary=True)
-
     c.execute("SELECT COUNT(*) as cnt FROM products")
     r = c.fetchone()
     if (r['cnt'] if isinstance(r, dict) else r[0]) == 0:
         for p in [
-            ("Non Obi 500g","4600001","pcs",3500,2200,120),
-            ("Sut 1L Nestle","4600002","l",9800,7500,45),
-            ("Shakar 1kg","4600003","kg",12000,9000,80),
-            ("Coca-Cola 0.5L","4600004","pcs",8500,6000,200),
-            ("Makaron 500g","4600005","pcs",7000,5200,60),
-            ("Guruch 1kg","4600006","kg",14000,10500,90),
-            ("Sabzi 1kg","4600007","kg",6000,4000,100),
-            ("Kartoshka 1kg","4600008","kg",5000,3500,200),
-            ("Choy Lipton 100g","4600009","pcs",18000,13000,40),
-            ("Qand 1kg","4600010","kg",16000,12000,55),
+            ("Tilton/Kachok 0.5l Choy",          "4601001", "pcs",  16000,  12000,   10),
+            ("APREL KAITA 0.5l Shisha",           "4601002", "pcs",  10800,   8000,   12),
+            ("Azelit Grass antilit 600ml",         "4601003", "pcs",  23000,  17000,    2),
+            ("Novot Eryon Shirin tola 1kg",        "4601004", "kg",  142000, 100000,    5),
+            ("Olivia Sovun 140gr",                 "4601005", "pcs", 150000, 110000,    4),
+            ("Chortoq 0.5l Shisha",                "4601006", "pcs",  16000,  11000,   18),
+            ("APREL KAITA 900G",                   "4601007", "pcs",  23000,  17000,    5),
+            ("Azelit Grass 600ml",                 "4601008", "pcs",  23000,  16000,    2),
+            ("Novot Eryon 1kg",                    "4601009", "kg",  142000,  99000,    5),
+            ("Olivia Aldar Zira Choy 350g",        "4601010", "pcs",   6800,   4800,   18),
+            ("Naturella Zelyoniy Garox 400g",      "4601011", "pcs",  24000,  17000,    3),
+            ("Oq Qand 10kg",                       "4601012", "kg",    7000,   5000,   15),
+            ("Bavi 70g",                           "4601013", "pcs",   6600,   4500,   24),
+            ("Patr Pichin 4kg (karobka)",          "4601014", "box", 130000,  95000,    2),
+            ("Angel 100gr Xamirturish (10talik)",  "4601015", "box",   5300,   3800,   20),
+            ("Orbit Sadich 408g",                  "4601016", "pcs",  58000,  42000,    1),
+            ("Malyuk Standart 2 300g",             "4601017", "pcs",  59000,  43000,    2),
+            ("Nutriak Kok 300g 2",                 "4601018", "pcs",  58000,  42000,    4),
+            ("TWO BITE PICHIN 2kg (karobka)",      "4601019", "box",  52000,  38000,    2),
+            ("Ole pecheni 3.5kg (karobka)",        "4601020", "box", 133000,  98000,    1),
+            ("Yubleyni Vafli 3kg assarti",         "4601021", "box",  72000,  53000,    2),
+            ("5+ Shkoladli Vafli 2kg (karobka)",  "4601022", "box",  96000,  70000,    1),
+            ("Tamat o'rikzor mayda 0.43ml",       "4601023", "pcs",  15000,  10500,   20),
+            ("BUMAGA 777 arzon",                   "4601024", "pcs",   3500,   2500,   30),
+            ("Kristal Gel 500ml Qimmat",           "4601025", "pcs",   9000,   6500,    2),
+            ("Mico food kukuruz 1kg",              "4601026", "kg",   38000,  27000,  220),
         ]:
             c.execute(
                 "INSERT INTO products VALUES (%s,%s,%s,%s,%s,%s,%s,1,%s)",
                 (str(uuid.uuid4()),p[0],p[1],p[2],p[3],p[4],p[5],now))
 
     c.execute("SELECT COUNT(*) as cnt FROM sales")
-    if (lambda r: r['cnt'] if isinstance(r,dict) else r[0])(c.fetchone()) == 0:
-        for total, method in [(35000,"cash"),(98500,"payme"),(22000,"cash"),
-                               (150000,"uzcard"),(47500,"cash"),(63000,"click")]:
-            c.execute(
-                "INSERT INTO sales VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (str(uuid.uuid4()),_receipt(),"Demo Kassir",total,method,"synced",now))
+    r = c.fetchone()
+    if (r['cnt'] if isinstance(r, dict) else r[0]) == 0:
+        pass  # Demo sotuvlar yo'q — haqiqiy ma'lumotlar bilan boshlash
 
-    c.execute("SELECT COUNT(*) as cnt FROM farms")
-    if (lambda r: r['cnt'] if isinstance(r,dict) else r[0])(c.fetchone()) == 0:
-        f1,f2 = str(uuid.uuid4()),str(uuid.uuid4())
-        for fid,name,owner,phone,addr,region,ftype,debt,supplied in [
-            (f1,"Bahor Fermer Xo'jaligi","Toshmatov Behruz","+998901112233","Sirdaryo","Sirdaryo","don",320000,1850000),
-            (f2,"Yashil Vodiy FX","Rahimov Akbar","+998912223344","Farg'ona","Farg'ona","sabzavot",150000,970000),
-        ]:
-            c.execute(
-                "INSERT INTO farms(id,name,owner_name,phone,address,region,farm_type,total_debt,total_supplied,notes,is_active,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                (fid,name,owner,phone,addr,region,ftype,debt,supplied,"",1,now))
-
-    c.execute("SELECT COUNT(*) as cnt FROM debtors")
-    if (lambda r: r['cnt'] if isinstance(r,dict) else r[0])(c.fetchone()) == 0:
-        d1,d2 = str(uuid.uuid4()),str(uuid.uuid4())
-        for did,name,phone,addr,debt,note in [
-            (d1,"Karimov Botir","+998901234567","Chilonzor 5",150000,"Doimiy mijoz"),
-            (d2,"Rahimova Malika","+998912345678","Yunusobod 12",85000,""),
-        ]:
-            c.execute(
-                "INSERT INTO debtors VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (did,name,phone,addr,debt,now,note))
     conn.commit()
 
-
-
-
-
-
-# ── Yordamchi funksiyalar ────────────────────────────────────
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
