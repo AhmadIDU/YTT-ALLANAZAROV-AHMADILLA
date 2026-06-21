@@ -93,10 +93,19 @@ class _MySQLCursor:
 
 class _DictRow(dict):
     def __getitem__(self, k):
-        if isinstance(k, int): return list(self.values())[k]
-        return super().__getitem__(k)
+        if isinstance(k, int):
+            v = list(self.values())[k]
+        else:
+            v = super().__getitem__(k)
+        # MySQL DECIMAL → float avtomatik konvertatsiya
+        from decimal import Decimal
+        if isinstance(v, Decimal): return float(v)
+        return v
     def __getattr__(self, k):
-        try: return self[k]
+        try:
+            v = self[k]
+            from decimal import Decimal
+            return float(v) if isinstance(v, Decimal) else v
         except KeyError: raise AttributeError(k)
     @property
     def _mapping(self): return self
@@ -377,6 +386,12 @@ def _receipt():
     d = datetime.now().strftime("%Y%m%d")
     return f"PK-{d}-{str(uuid.uuid4())[:4].upper()}"
 
+def _flt(v):
+    """MySQL DECIMAL → float, boshqalar o'zgarishsiz"""
+    from decimal import Decimal
+    return float(v) if isinstance(v, Decimal) else v
+
+
 def _ok(data, st=200):   return st, data
 def _err(msg, st=400):   return st, {"error": msg}
 
@@ -620,7 +635,7 @@ def handle_api(method, path, body, params):
                     (str(uuid.uuid4()), sid, it.get("product_id",""),
                      it.get("product_name", it.get("name","")),
                      it.get("quantity",1), it.get("unit_price",0), it.get("total_price",0)))
-                conn.execute("UPDATE products SET stock_qty=MAX(0,stock_qty-?) WHERE id=?",
+                conn.execute("UPDATE products SET stock_qty=GREATEST(0,stock_qty-%s) WHERE id=%s" if DB_MODE=="mysql" else "UPDATE products SET stock_qty=MAX(0,stock_qty-?) WHERE id=?",
                     (it.get("quantity",1), it.get("product_id","")))
             conn.commit()
             row = dict(conn.execute("SELECT * FROM sales WHERE id=?",(sid,)).fetchone())
@@ -973,7 +988,7 @@ def handle_api(method, path, body, params):
             )
             conn.execute(
                 "UPDATE farms SET total_debt=total_debt+? WHERE id=?",
-                (amt-paid, fid)
+                (_flt(amt)-_flt(paid), fid)
             )
             conn.commit()
             row = dict(conn.execute("SELECT * FROM farm_debts WHERE id=?",(did,)).fetchone())
@@ -987,9 +1002,9 @@ def handle_api(method, path, body, params):
             if not debt: conn.close(); return _err("Qarz topilmadi",404)
             debt = dict(debt)
 
-            actual   = min(pay_amt, debt["remaining"])
-            new_paid = debt["paid_amount"] + actual
-            new_rem  = debt["remaining"]   - actual
+            actual   = min(pay_amt, _flt(debt["remaining"]))
+            new_paid = _flt(debt["paid_amount"]) + actual
+            new_rem  = _flt(debt["remaining"])   - actual
             new_st   = "paid" if new_rem <= 0 else "active"
 
             conn.execute(
@@ -1003,7 +1018,7 @@ def handle_api(method, path, body, params):
                  body.get("note",""), _now())
             )
             conn.execute(
-                "UPDATE farms SET total_debt=MAX(0,total_debt-?) WHERE id=?",
+                "UPDATE farms SET total_debt=GREATEST(0,total_debt-%s) WHERE id=%s" if DB_MODE=="mysql" else "UPDATE farms SET total_debt=GREATEST(0,total_debt-%s) WHERE id=%s" if DB_MODE=="mysql" else "UPDATE farms SET total_debt=MAX(0,total_debt-?) WHERE id=?",
                 (actual, debt["farm_id"])
             )
             conn.commit()
@@ -1036,9 +1051,9 @@ def handle_api(method, path, body, params):
 
             for debt in active_debts:
                 if remaining_pay <= 0: break
-                actual   = min(remaining_pay, debt["remaining"])
-                new_paid = debt["paid_amount"] + actual
-                new_rem  = debt["remaining"]   - actual
+                actual   = min(remaining_pay, _flt(debt["remaining"]))
+                new_paid = _flt(debt["paid_amount"]) + actual
+                new_rem  = _flt(debt["remaining"])   - actual
                 new_st   = "paid" if new_rem <= 0 else "active"
                 conn.execute(
                     "UPDATE farm_debts SET paid_amount=?,remaining=?,status=? WHERE id=?",
@@ -1053,7 +1068,7 @@ def handle_api(method, path, body, params):
                 paid_count    += 1
 
             conn.execute(
-                "UPDATE farms SET total_debt=MAX(0,total_debt-?) WHERE id=?",
+                "UPDATE farms SET total_debt=GREATEST(0,total_debt-%s) WHERE id=%s" if DB_MODE=="mysql" else "UPDATE farms SET total_debt=MAX(0,total_debt-?) WHERE id=?",
                 (total_paid, fid)
             )
             conn.commit()
@@ -1221,9 +1236,9 @@ def handle_api(method, path, body, params):
             debt = dict(debt)
 
             # To'lov miqdori qarzdan oshmasin
-            actual_pay = min(pay_amount, debt["remaining"])
-            new_paid   = debt["paid_amount"] + actual_pay
-            new_remain = debt["remaining"]   - actual_pay
+            actual_pay = min(pay_amount, _flt(debt["remaining"]))
+            new_paid   = _flt(debt["paid_amount"]) + actual_pay
+            new_remain = _flt(debt["remaining"])   - actual_pay
             new_status = "paid" if new_remain <= 0 else "active"
 
             conn.execute(
@@ -1238,7 +1253,7 @@ def handle_api(method, path, body, params):
             )
             # Qarzdorning umumiy qarzini kamaytirish
             conn.execute(
-                "UPDATE debtors SET total_debt = MAX(0, total_debt - ?) WHERE id=?",
+                "UPDATE debtors SET total_debt=GREATEST(0,total_debt-%s) WHERE id=%s" if DB_MODE=="mysql" else "UPDATE debtors SET total_debt=MAX(0,total_debt-?) WHERE id=?",
                 (actual_pay, debt["debtor_id"])
             )
             conn.commit()
