@@ -134,6 +134,7 @@ input:focus,select:focus{border-color:#2563eb}
    <button class="nav-btn" onclick="show('intake')">🚛 Tovar qabuli</button>
    <button class="nav-btn" onclick="show('reports')">📈 Hisobotlar</button>
    <button class="nav-btn" onclick="show('sales')">🧾 Sotuvlar</button>
+   <button class="nav-btn" onclick="show('settings')">⚙️ Sozlamalar</button>
   </nav>
  </aside>
  <!-- Main -->
@@ -190,15 +191,15 @@ function toast(msg, type='ok') {
 
 function show(page) {
   document.querySelectorAll('.nav-btn').forEach((b,i) => {
-    const pages = ['dashboard','pos','products','debtors','farms','intake','reports','sales'];
+    const pages = ['dashboard','pos','products','debtors','farms','intake','reports','sales','settings'];
     b.classList.toggle('active', pages[i] === page);
   });
   const titles = {dashboard:'📊 Dashboard', pos:'🛒 Kassa Terminali',
     products:'📦 Mahsulotlar', debtors:'💳 Qarzdorlar va Nasiya',
     farms:'🏭 Fermalar', intake:'🚛 Tovar Qabuli (Kirim)',
-    reports:'📈 Hisobotlar', sales:'🧾 Sotuvlar'};
+    reports:'📈 Hisobotlar', sales:'🧾 Sotuvlar', settings:'⚙️ Sozlamalar'};
   document.getElementById('page-title').textContent = titles[page] || page;
-  ({dashboard, pos, products, debtors, farms, intake, reports, sales})[page]();
+  ({dashboard, pos, products, debtors, farms, intake, reports, sales, settings})[page]();
 }
 
 // ═══════════════════ DASHBOARD ═══════════════════
@@ -964,6 +965,256 @@ async function sales() {
 // ═══════════════════ ISHGA TUSHIRISH ═══════════════════
 show('dashboard');
 
+// ═══════════════════════════════════════════════════════════════
+// ⚙️ SOZLAMALAR SAHIFASI
+// ═══════════════════════════════════════════════════════════════
+function settings() {
+  const el = document.getElementById('main-content');
+
+  // LocalStorage dan joriy sozlamalarni olish
+  const cfg = {
+    shop_name:    localStorage.getItem('shop_name')    || 'PossKassa Do\'kon',
+    shop_address: localStorage.getItem('shop_address') || '',
+    shop_phone:   localStorage.getItem('shop_phone')   || '',
+    shop_inn:     localStorage.getItem('shop_inn')     || '',
+    currency:     localStorage.getItem('currency')     || "so'm",
+    vat_rate:     localStorage.getItem('vat_rate')     || '12',
+    receipt_footer: localStorage.getItem('receipt_footer') || 'Xaridingiz uchun rahmat!',
+    low_stock_threshold: localStorage.getItem('low_stock_threshold') || '10',
+    db_mode:      localStorage.getItem('db_mode')      || 'mysql',
+    server_port:  localStorage.getItem('server_port')  || '3500',
+    theme:        localStorage.getItem('theme')         || 'dark',
+    lang:         localStorage.getItem('lang')          || 'uz',
+  };
+
+  el.innerHTML = `
+  <div style="max-width:800px">
+
+    <!-- Do'kon ma'lumotlari -->
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:16px;
+          display:flex;align-items:center;gap:8px">
+        🏪 Do'kon ma'lumotlari
+      </h3>
+      <div class="form-row cols-2">
+        <div><label>Do'kon nomi</label>
+          <input id="s-shop-name" value="${cfg.shop_name}" placeholder="PossKassa Do'kon"></div>
+        <div><label>INN / STIR</label>
+          <input id="s-shop-inn" value="${cfg.shop_inn}" placeholder="123456789"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div><label>Telefon</label>
+          <input id="s-shop-phone" value="${cfg.shop_phone}" placeholder="+998 90 123 45 67"></div>
+        <div><label>Manzil</label>
+          <input id="s-shop-address" value="${cfg.shop_address}" placeholder="Toshkent, Chilonzor 5"></div>
+      </div>
+      <div class="form-row">
+        <div><label>Chek pastki yozuv</label>
+          <input id="s-receipt-footer" value="${cfg.receipt_footer}" placeholder="Xaridingiz uchun rahmat!"></div>
+      </div>
+    </div>
+
+    <!-- Moliya sozlamalari -->
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:16px;
+          display:flex;align-items:center;gap:8px">
+        💰 Moliya sozlamalari
+      </h3>
+      <div class="form-row cols-3">
+        <div><label>Valyuta belgisi</label>
+          <select id="s-currency">
+            <option value="so'm" ${cfg.currency=="so'm"?'selected':''}>so'm (UZS)</option>
+            <option value="USD"  ${cfg.currency=='USD'?'selected':''}>$ (USD)</option>
+            <option value="EUR"  ${cfg.currency=='EUR'?'selected':''}>€ (EUR)</option>
+          </select>
+        </div>
+        <div><label>QQS foizi (%)</label>
+          <input id="s-vat" type="number" min="0" max="100" value="${cfg.vat_rate}" placeholder="12"></div>
+        <div><label>Kam zaxira chegarasi</label>
+          <input id="s-low-stock" type="number" min="0" value="${cfg.low_stock_threshold}" placeholder="10"></div>
+      </div>
+    </div>
+
+    <!-- Server / Database sozlamalari -->
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:16px;
+          display:flex;align-items:center;gap:8px">
+        🗄️ Server va Database
+      </h3>
+      <div class="form-row cols-2">
+        <div><label>Database rejimi</label>
+          <select id="s-db-mode">
+            <option value="mysql"  ${cfg.db_mode=='mysql'?'selected':''}>MySQL (phpMyAdmin)</option>
+            <option value="sqlite" ${cfg.db_mode=='sqlite'?'selected':''}>SQLite (lokal fayl)</option>
+          </select>
+        </div>
+        <div><label>Server porti</label>
+          <input id="s-port" type="number" value="${cfg.server_port}" placeholder="3500"></div>
+      </div>
+      <div style="background:#eff6ff;border-radius:8px;padding:10px;font-size:12px;color:#1d4ed8;margin-top:8px">
+        ℹ️ <b>MySQL:</b> <code>py -3.14 server.py 3500 mysql</code><br>
+        ℹ️ <b>SQLite:</b> <code>py -3.14 server.py 3500</code>
+      </div>
+    </div>
+
+    <!-- Interfeys sozlamalari -->
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:16px;
+          display:flex;align-items:center;gap:8px">
+        🎨 Interfeys
+      </h3>
+      <div class="form-row cols-2">
+        <div><label>Til</label>
+          <select id="s-lang">
+            <option value="uz" ${cfg.lang=='uz'?'selected':''}>🇺🇿 O'zbekcha</option>
+            <option value="ru" ${cfg.lang=='ru'?'selected':''}>🇷🇺 Русский</option>
+          </select>
+        </div>
+        <div><label>Mavzu</label>
+          <select id="s-theme">
+            <option value="dark"  ${cfg.theme=='dark'?'selected':''}>🌙 Qorang'i</option>
+            <option value="light" ${cfg.theme=='light'?'selected':''}>☀️ Yorug'</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ma'lumotlar bazasini tozalash -->
+    <div class="card" style="margin-bottom:16px;border:1px solid #fca5a5">
+      <h3 style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:12px;
+          display:flex;align-items:center;gap:8px">
+        ⚠️ Xavfli zona
+      </h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" style="background:#fff;border:1px solid #fca5a5;color:#dc2626"
+          onclick="clearSalesData()">
+          🗑️ Barcha sotuvlarni o'chirish
+        </button>
+        <button class="btn" style="background:#fff;border:1px solid #fca5a5;color:#dc2626"
+          onclick="clearDebtsData()">
+          🗑️ Barcha qarzlarni o'chirish
+        </button>
+        <button class="btn" style="background:#dc2626;color:#fff"
+          onclick="clearAllData()">
+          💣 Hamma ma'lumotni o'chirish
+        </button>
+      </div>
+      <p style="font-size:11px;color:#94a3b8;margin-top:8px">
+        ⚠️ Bu amalni bekor qilib bo'lmaydi! Oldin zaxira nusxa oling.
+      </p>
+    </div>
+
+    <!-- Tizim ma'lumotlari -->
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px">
+        ℹ️ Tizim haqida
+      </h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+        <div><span style="color:#64748b">Versiya:</span> <b>PossKassa v1.0</b></div>
+        <div><span style="color:#64748b">Server:</span> <b id="s-server-status">tekshirilmoqda...</b></div>
+        <div><span style="color:#64748b">API URL:</span> <b>${API}</b></div>
+        <div><span style="color:#64748b">Sana:</span> <b>${new Date().toLocaleDateString('uz-UZ')}</b></div>
+      </div>
+      <button class="btn btn-gray" style="margin-top:10px;font-size:12px" onclick="checkServerStatus()">
+        🔄 Server holatini tekshirish
+      </button>
+    </div>
+
+    <!-- Saqlash -->
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-gray" onclick="settings()">↺ Bekor</button>
+      <button class="btn btn-blue" onclick="saveSettings()" style="padding:10px 28px">
+        💾 Saqlash
+      </button>
+    </div>
+
+  </div>`;
+
+  // Server holatini tekshirish
+  checkServerStatus();
+}
+
+// ── Sozlamalarni saqlash ──────────────────────────────────────
+function saveSettings() {
+  const fields = {
+    shop_name:           document.getElementById('s-shop-name')?.value.trim(),
+    shop_inn:            document.getElementById('s-shop-inn')?.value.trim(),
+    shop_phone:          document.getElementById('s-shop-phone')?.value.trim(),
+    shop_address:        document.getElementById('s-shop-address')?.value.trim(),
+    receipt_footer:      document.getElementById('s-receipt-footer')?.value.trim(),
+    currency:            document.getElementById('s-currency')?.value,
+    vat_rate:            document.getElementById('s-vat')?.value,
+    low_stock_threshold: document.getElementById('s-low-stock')?.value,
+    db_mode:             document.getElementById('s-db-mode')?.value,
+    server_port:         document.getElementById('s-port')?.value,
+    lang:                document.getElementById('s-lang')?.value,
+    theme:               document.getElementById('s-theme')?.value,
+  };
+
+  Object.entries(fields).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) localStorage.setItem(k, v);
+  });
+
+  toast('✅ Sozlamalar saqlandi!');
+
+  // Mavzuni qo'llash
+  applyTheme(fields.theme);
+}
+
+// ── Mavzuni qo'llash ─────────────────────────────────────────
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.querySelector('.sidebar').style.background = '#1e293b';
+  }
+  // Hozircha qorang'i mavzu saqlangan
+}
+
+// ── Server holatini tekshirish ───────────────────────────────
+async function checkServerStatus() {
+  const el = document.getElementById('s-server-status');
+  if (!el) return;
+  try {
+    const r = await api('GET', '/health');
+    if (r && !r.error) {
+      el.innerHTML = '<span style="color:#16a34a">✅ Ishlayapti</span>';
+    } else {
+      el.innerHTML = '<span style="color:#dc2626">❌ Xato</span>';
+    }
+  } catch(e) {
+    el.innerHTML = '<span style="color:#dc2626">❌ Ulanmadi</span>';
+  }
+}
+
+// ── Ma'lumotlarni tozalash ────────────────────────────────────
+async function clearSalesData() {
+  if (!confirm('Barcha sotuvlar o\'chirilsinmi?\nBu amalni bekor qilib bo\'lmaydi!')) return;
+  // API orqali o'chirish (hozircha xabar)
+  toast('⚠️ Bu funksiya tez orada qo\'shiladi', 'err');
+}
+
+async function clearDebtsData() {
+  if (!confirm('Barcha qarzlar o\'chirilsinmi?\nBu amalni bekor qilib bo\'lmaydi!')) return;
+  toast('⚠️ Bu funksiya tez orada qo\'shiladi', 'err');
+}
+
+async function clearAllData() {
+  if (!confirm('⚠️ BARCHA MA\'LUMOTLAR O\'CHIRILADI!\n\nDavom etasizmi?')) return;
+  if (!confirm('Ishonchingiz komilmi? Bu amalni bekor qilib bo\'lmaydi!')) return;
+  toast('⚠️ Bu funksiya tez orada qo\'shiladi', 'err');
+}
+
+// ── Chekda do'kon nomini ishlatish ────────────────────────────
+function getShopName() {
+  return localStorage.getItem('shop_name') || 'PossKassa Do\'kon';
+}
+function getShopPhone() {
+  return localStorage.getItem('shop_phone') || '';
+}
+function getReceiptFooter() {
+  return localStorage.getItem('receipt_footer') || 'Xaridingiz uchun rahmat! 🙏';
+}
+
+
 // ═══════════════════════════════════════════════════════
 // 🏭 FERMALAR SAHIFASI
 // ═══════════════════════════════════════════════════════
@@ -1411,7 +1662,7 @@ async function debtorCard(did) {
     </div>`
   ).join('');
   const html = `<div class="receipt-paper">
-    <div class="r-title">PossKassa — Nasiya Hisobi</div>
+    <div class="r-title">${getShopName()} — Nasiya Hisobi</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Mijoz:</span><span><b>${d.full_name}</b></span></div>
     <div class="r-row"><span>Tel:</span><span>${d.phone||'—'}</span></div>
@@ -1432,7 +1683,7 @@ function printDebtPayReceipt(res) {
   const debt   = res.debt   || {};
   const debtor = res.debtor || {};
   const html = `<div class="receipt-paper">
-    <div class="r-title">PossKassa — Nasiya To'lov</div>
+    <div class="r-title">${getShopName()} — Nasiya To'lov</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Chek:</span><span>${res.receipt_number||''}</span></div>
     <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
@@ -1444,7 +1695,7 @@ function printDebtPayReceipt(res) {
     <div class="r-row"><span>Qoldiq:</span><span style="color:#dc2626">${fmt(debt.remaining||0)}</span></div>
     <div class="r-divider"></div>
     <div style="text-align:center">${res.message||''}</div>
-    <div style="text-align:center;margin-top:6px">Rahmat! 🙏</div>
+    <div style="text-align:center;margin-top:6px">${getReceiptFooter()}</div>
   </div>`;
   showPrintModal(html, "Nasiya To'lov Cheki");
 }
@@ -2116,7 +2367,7 @@ async function saveFarmSupply(fid) {
 function printFarmPayReceipt(res) {
   const farm = res.farm||{}; const debt = res.debt||{};
   const html = `<div class="receipt-paper">
-    <div class="r-title">PossKassa — Ferma To'lov</div>
+    <div class="r-title">${getShopName()} — Ferma To'lov</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Chek:</span><span>${res.receipt_number||''}</span></div>
     <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
@@ -2139,7 +2390,7 @@ function printFarmPayAllReceipt(fid, fname, owner, debts, totalPaid, method) {
     `<div class="r-row"><span>${d.description||'Qarz'}</span><span>${fmt(d.remaining)}</span></div>`
   ).join('');
   const html = `<div class="receipt-paper">
-    <div class="r-title">PossKassa — BARCHA QARZ YOPILDI</div>
+    <div class="r-title">${getShopName()} — BARCHA QARZ YOPILDI</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Sana:</span><span>${new Date().toLocaleDateString('uz-UZ')}</span></div>
     <div class="r-divider"></div>
@@ -2153,7 +2404,7 @@ function printFarmPayAllReceipt(fid, fname, owner, debts, totalPaid, method) {
     <div class="r-row"><span>To'lov usuli:</span><span>${methods[method]||method}</span></div>
     <div class="r-divider"></div>
     <div style="text-align:center;font-weight:600;color:#16a34a">✅ BARCHA QARZLAR YOPILDI!</div>
-    <div style="text-align:center;margin-top:6px">Rahmat! 🙏</div>
+    <div style="text-align:center;margin-top:6px">${getReceiptFooter()}</div>
   </div>`;
   showPrintModal(html, 'Barcha Qarz Yopildi');
 }
@@ -2164,7 +2415,7 @@ async function printFarmCard(fid) {
     `<div class="r-row"><span>${d.description||'Qarz'}</span><span style="color:#dc2626">${fmt(d.remaining)}</span></div>`
   ).join('');
   const html = `<div class="receipt-paper">
-    <div class="r-title">PossKassa — Ferma Hisobi</div>
+    <div class="r-title">${getShopName()} — Ferma Hisobi</div>
     <div class="r-divider"></div>
     <div class="r-row"><span>Ferma:</span><span><b>${f.name}</b></span></div>
     <div class="r-row"><span>Egasi:</span><span>${f.owner_name||'—'}</span></div>
