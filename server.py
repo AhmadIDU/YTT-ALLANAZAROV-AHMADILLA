@@ -258,7 +258,7 @@ def init_db():
 def _init_mysql():
     import mysql.connector
     conn = mysql.connector.connect(**DB_CONFIG)
-    c = conn.cursor()
+    c = conn.cursor(dictionary=True)
     # MySQL da har bir CREATE TABLE alohida
     for stmt in _TABLES_MYSQL.split(";"):
         stmt = stmt.strip()
@@ -382,10 +382,13 @@ def _seed_sqlite(c):
 def _seed_mysql(c, conn):
     """MySQL demo ma'lumotlari"""
     now = _now()
-    ph = "%s"
+
+    # dictionary=True cursor yaratamiz
+    c = conn.cursor(dictionary=True)
 
     c.execute("SELECT COUNT(*) as cnt FROM products")
-    if c.fetchone()['cnt'] == 0:
+    r = c.fetchone()
+    if (r['cnt'] if isinstance(r, dict) else r[0]) == 0:
         for p in [
             ("Non Obi 500g","4600001","pcs",3500,2200,120),
             ("Sut 1L Nestle","4600002","l",9800,7500,45),
@@ -403,7 +406,7 @@ def _seed_mysql(c, conn):
                 (str(uuid.uuid4()),p[0],p[1],p[2],p[3],p[4],p[5],now))
 
     c.execute("SELECT COUNT(*) as cnt FROM sales")
-    if c.fetchone()['cnt'] == 0:
+    if (lambda r: r['cnt'] if isinstance(r,dict) else r[0])(c.fetchone()) == 0:
         for total, method in [(35000,"cash"),(98500,"payme"),(22000,"cash"),
                                (150000,"uzcard"),(47500,"cash"),(63000,"click")]:
             c.execute(
@@ -411,7 +414,7 @@ def _seed_mysql(c, conn):
                 (str(uuid.uuid4()),_receipt(),"Demo Kassir",total,method,"synced",now))
 
     c.execute("SELECT COUNT(*) as cnt FROM farms")
-    if c.fetchone()['cnt'] == 0:
+    if (lambda r: r['cnt'] if isinstance(r,dict) else r[0])(c.fetchone()) == 0:
         f1,f2 = str(uuid.uuid4()),str(uuid.uuid4())
         for fid,name,owner,phone,addr,region,ftype,debt,supplied in [
             (f1,"Bahor Fermer Xo'jaligi","Toshmatov Behruz","+998901112233","Sirdaryo","Sirdaryo","don",320000,1850000),
@@ -422,7 +425,7 @@ def _seed_mysql(c, conn):
                 (fid,name,owner,phone,addr,region,ftype,debt,supplied,now))
 
     c.execute("SELECT COUNT(*) as cnt FROM debtors")
-    if c.fetchone()['cnt'] == 0:
+    if (lambda r: r['cnt'] if isinstance(r,dict) else r[0])(c.fetchone()) == 0:
         d1,d2 = str(uuid.uuid4()),str(uuid.uuid4())
         for did,name,phone,addr,debt,note in [
             (d1,"Karimov Botir","+998901234567","Chilonzor 5",150000,"Doimiy mijoz"),
