@@ -788,17 +788,6 @@ async function reviewDraft(id) {
   </div>`);
   window._draftRows = rows;
 }
-      </div>
-    </div>
-  </div>`);
-  window._draftRows = rows;
-}
-
-function toggleRow(i){
-  const el = document.getElementById(`row-${i}`);
-  const checked = document.getElementById(`chk-${i}`).checked;
-  el.style.opacity = checked ? '1' : '0.4';
-}
 
 // Qator narxi o'zgarganda jami yangilash
 function updateRowTotal(i) {
