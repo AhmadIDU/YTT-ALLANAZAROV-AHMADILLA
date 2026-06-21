@@ -174,6 +174,118 @@ def _ok(data, st=200):   return st, data
 def _err(msg, st=400):   return st, {"error": msg}
 
 
+# ══════════════════════════════════════════════════════════════
+# Claude Vision OCR — yetkazuvchi ro'yxatini rasmdan o'qish
+# ══════════════════════════════════════════════════════════════
+def _ocr_with_claude(image_base64: str, media_type: str = "image/jpeg") -> list:
+    """
+    Rasm base64 → Claude Vision → mahsulot qatorlari JSON
+
+    Qaytaradi:
+    [{"name":"...", "qty":10, "unit":"pcs", "unit_cost":5000,
+      "total_cost":50000, "barcode":null, "vat_rate":12,
+      "approved":True, "_match":{"action":"create_new",...}}]
+    """
+    import urllib.request
+    import json as _json
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY topilmadi")
+
+    prompt = """Bu rasm yetkazuvchining tovar ro'yxati yoki hisob-fakturasi.
+Rasmdan barcha tovar qatorlarini ajratib, FAQAT JSON array qaytardir.
+
+Har bir element:
+{
+  "name": "tovar nomi (xuddi rasmdagi kabi, o'zbek/rus tilida)",
+  "barcode": null,
+  "qty": miqdor_soni (raqam),
+  "unit": "pcs yoki kg yoki l yoki box",
+  "unit_cost": birlik_narxi_somda (raqam, vergulsiz),
+  "total_cost": jami_narx (qty * unit_cost, raqam),
+  "vat_rate": 12
+}
+
+QOIDALAR:
+- Faqat JSON array qaytardir, hech qanday izoh yoki markdown yo'q
+- Raqamlar faqat son (masalan: 5000 emas "5 000")
+- O'qib bo'lmaydigan qatorlarni o'tkazib yuboring
+
+JSON:"""
+
+    payload = _json.dumps({
+        "model": "claude-opus-4-5",
+        "max_tokens": 4096,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": image_base64
+                    }
+                },
+                {"type": "text", "text": prompt}
+            ]
+        }]
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data    = payload,
+        headers = {
+            "x-api-key":         api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type":      "application/json",
+        },
+        method = "POST"
+    )
+
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        result = _json.loads(resp.read())
+
+    raw_text = result["content"][0]["text"].strip()
+
+    # JSON tozalash
+    import re
+    raw_text = re.sub(r"```(?:json)?\s*", "", raw_text).strip().rstrip("`")
+    start = raw_text.find("[")
+    end   = raw_text.rfind("]")
+    if start != -1 and end != -1:
+        rows = _json.loads(raw_text[start:end+1])
+    else:
+        rows = _json.loads(raw_text)
+
+    # Har bir qatorni standartlashtirish
+    result_rows = []
+    for r in rows:
+        if not isinstance(r, dict): continue
+        name = str(r.get("name","")).strip()
+        if not name: continue
+        def _num(v, d=0):
+            try: return float(str(v).replace(" ","").replace(",","."))
+            except: return d
+        qty       = max(0.001, _num(r.get("qty",1), 1))
+        unit_cost = _num(r.get("unit_cost",0))
+        total     = _num(r.get("total_cost",0)) or qty * unit_cost
+        result_rows.append({
+            "name":       name[:200],
+            "barcode":    None,
+            "qty":        qty,
+            "unit":       str(r.get("unit","pcs")).lower()[:10],
+            "unit_cost":  unit_cost,
+            "total_cost": total,
+            "vat_rate":   _num(r.get("vat_rate",12), 12),
+            "approved":   True,
+            "_match":     {"action":"create_new","candidates":[]}
+        })
+    return result_rows
+
+
+
 
 # ══════════════════════════════════════════════════════════════
 # 2. API Router
@@ -479,6 +591,22 @@ def handle_api(method, path, body, params):
 
         if sub in ("photo","csv","esf") and method == "POST":
             did = str(uuid.uuid4())
+
+            # ── HAQIQIY CLAUDE VISION OCR ─────────────────────
+            if sub == "photo" and body.get("image_base64"):
+                try:
+                    rows = _ocr_with_claude(body["image_base64"], body.get("media_type","image/jpeg"))
+                    conn.execute("INSERT INTO intake_drafts VALUES (?,?,?,?,?)",
+                        (did, "photo", "review_pending", json.dumps(rows), _now()))
+                    conn.commit(); conn.close()
+                    return _ok({"draft_id":did,"status":"review_pending",
+                                "rows_count":len(rows),
+                                "message":f"Claude Vision {len(rows)} ta tovar aniqladi!"}, 201)
+                except Exception as e:
+                    # API kalit yo'q yoki xato — mock ga o'tish
+                    pass
+
+            # ── MOCK (API kalit yo'q bo'lsa) ──────────────────
             mock = [
                 {"name":"Demo tovar 1","barcode":"9900001","qty":10,"unit":"pcs",
                  "unit_cost":5000,"total_cost":50000,"vat_rate":12,"approved":True,

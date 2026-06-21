@@ -546,29 +546,122 @@ async function intake() {
 
   el.innerHTML = `
   <div class="grid-2" style="margin-bottom:24px">
+
+    <!-- YANGI KIRIM -->
     <div class="card">
       <h3 style="margin-bottom:16px">📋 Yangi kirim yaratish</h3>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-        <button onclick="simulateIntake('photo')" style="padding:16px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;text-align:center;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
-          <div style="font-size:28px">📷</div><div style="font-size:12px;font-weight:600;margin-top:6px">Foto OCR</div><div style="font-size:11px;color:#94a3b8">Claude Vision</div>
+
+      <!-- FOTO yuklash zona -->
+      <div id="photo-drop-zone" class="drop-zone" style="margin-bottom:16px;position:relative"
+           onclick="document.getElementById('photo-file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="handlePhotoDrop(event)">
+        <input type="file" id="photo-file-input" accept="image/*" style="display:none"
+               onchange="handlePhotoSelect(this)">
+        <div id="photo-drop-content">
+          <div style="font-size:48px">📷</div>
+          <div style="font-weight:600;font-size:14px;margin-top:8px;color:#1e293b">
+            Optomdan kelgan ro'yxat rasmini tashlang
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">
+            yoki bosib faylni tanlang (JPG, PNG, WEBP)
+          </div>
+          <div style="margin-top:12px">
+            <span style="background:#eff6ff;color:#2563eb;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600">
+              🤖 Claude Vision AI tahlil qiladi
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Boshqa usullar -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <button onclick="simulateIntake('csv')" style="padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;text-align:center;font-size:12px;font-weight:500;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
+          📊 CSV/Excel yuklash
         </button>
-        <button onclick="simulateIntake('csv')" style="padding:16px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;text-align:center;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
-          <div style="font-size:28px">📊</div><div style="font-size:12px;font-weight:600;margin-top:6px">CSV/Excel</div><div style="font-size:11px;color:#94a3b8">Fayl yuklash</div>
-        </button>
-        <button onclick="simulateIntake('esf')" style="padding:16px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;text-align:center;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
-          <div style="font-size:28px">🧾</div><div style="font-size:12px;font-weight:600;margin-top:6px">ESF</div><div style="font-size:11px;color:#94a3b8">didox.uz</div>
+        <button onclick="simulateIntake('esf')" style="padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;text-align:center;font-size:12px;font-weight:500;transition:.2s" onmouseover="this.style.borderColor='#2563eb'" onmouseout="this.style.borderColor='#e2e8f0'">
+          🧾 ESF (didox.uz)
         </button>
       </div>
+
       <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px;font-size:12px;color:#92400e">
         ⚠️ <strong>Muhim:</strong> Barcha kirimlar inson tekshiruvidan o'tgandan keyingina bazaga saqlanadi.
       </div>
     </div>
+
+    <!-- KIRIM LOYIHALARI -->
     <div class="card">
       <h3 style="margin-bottom:12px">📋 Kirim loyihalari (${drafts.length} ta)</h3>
-      ${drafts.length?`<table class="tbl"><thead><tr><th>Manba</th><th>Holat</th><th style="text-align:center">Qatorlar</th><th>Vaqt</th><th>Amal</th></tr></thead><tbody>${draftRows}</tbody></table>`:
-      '<p style="color:#94a3b8;text-align:center;padding:20px;font-size:13px">Hali kirim loyihasi yo\'q</p>'}
+      ${drafts.length
+        ? `<table class="tbl"><thead><tr><th>Manba</th><th>Holat</th><th style="text-align:center">Qatorlar</th><th>Vaqt</th><th>Amal</th></tr></thead><tbody>${draftRows}</tbody></table>`
+        : '<p style="color:#94a3b8;text-align:center;padding:20px;font-size:13px">Hali kirim loyihasi yo\'q</p>'
+      }
     </div>
   </div>`;
+}
+
+// ── Rasm tushirilganda (drag & drop) ──────────────────────
+function handlePhotoDrop(event) {
+  event.preventDefault();
+  document.getElementById('photo-drop-zone').classList.remove('drag');
+  const file = event.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    processPhotoFile(file);
+  } else {
+    toast('Faqat rasm fayllari qabul qilinadi!', 'err');
+  }
+}
+
+// ── Faylni tanlaganda ─────────────────────────────────────
+function handlePhotoSelect(input) {
+  const file = input.files[0];
+  if (file) processPhotoFile(file);
+}
+
+// ── Rasmni base64 ga aylantirish va serverga yuborish ─────
+async function processPhotoFile(file) {
+  // Rasmni preview ko'rsatish
+  const previewUrl = URL.createObjectURL(file);
+  const zone = document.getElementById('photo-drop-zone');
+  zone.innerHTML = `
+    <img src="${previewUrl}" style="max-height:180px;max-width:100%;border-radius:8px;margin-bottom:8px">
+    <div id="ocr-status" style="font-size:13px;font-weight:600;color:#2563eb">
+      ⏳ Claude Vision tahlil qilmoqda...
+    </div>`;
+
+  // Base64 ga o'girish
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64full = e.target.result; // "data:image/jpeg;base64,..."
+    const [header, base64data] = base64full.split(',');
+    const mediaType = header.match(/data:(.*);base64/)?.[1] || 'image/jpeg';
+
+    try {
+      document.getElementById('ocr-status').textContent = '🤖 Claude Vision ishlamoqda... (5-15 soniya)';
+      const res = await api('POST', '/intake/photo', {
+        image_base64: base64data,
+        media_type:   mediaType,
+        filename:     file.name,
+      });
+
+      if (res.draft_id) {
+        const msg = res.rows_count > 0
+          ? `✅ ${res.rows_count} ta tovar aniqladi!`
+          : '⚠️ Tovarlar aniqlanmadi — qo\'lda kiriting';
+        document.getElementById('ocr-status').textContent = msg;
+        toast(`🤖 ${res.message || msg}`);
+        setTimeout(() => reviewDraft(res.draft_id), 600);
+      } else {
+        document.getElementById('ocr-status').textContent = '❌ Xato yuz berdi';
+        toast(res.error || 'Xato', 'err');
+      }
+    } catch (err) {
+      document.getElementById('ocr-status').textContent = '❌ Server bilan bog\'lanishda xato';
+      toast('Server xatosi', 'err');
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 async function simulateIntake(source) {
@@ -583,39 +676,81 @@ async function simulateIntake(source) {
 async function reviewDraft(id) {
   const draft = await api('GET',`/intake/drafts/${id}`);
   const rows = draft.rows || [];
+
+  const totalJami = rows.reduce((s,r)=>(r.approved!==false?s+(r.qty||1)*(r.unit_cost||0):s), 0);
+
   const rowHtml = rows.map((r,i)=>`
-    <div class="review-row" id="row-${i}">
-      <input type="checkbox" id="chk-${i}" checked onchange="toggleRow(${i})">
-      <input id="rname-${i}" value="${r.name||''}" style="font-size:12px">
-      <input id="rqty-${i}" type="number" value="${r.qty||1}" style="font-size:12px;text-align:right">
-      <input id="rcost-${i}" type="number" value="${r.unit_cost||0}" style="font-size:12px;text-align:right">
-      <div style="font-weight:600;color:#2563eb;font-size:12px" id="rtotal-${i}">${fmt((r.qty||1)*(r.unit_cost||0))}</div>
-      <span class="badge ${r._match?.action==='update_stock'?'badge-green':r._match?.action==='create_new'?'badge-blue':'badge-yellow'}" style="font-size:10px">${r._match?.action==='update_stock'?'Mavjud':r._match?.action==='create_new'?'Yangi':'Tanlash'}</span>
+    <div class="review-row" id="row-${i}" style="background:${i%2?'#fafafa':'#fff'}">
+      <input type="checkbox" id="chk-${i}" ${r.approved!==false?'checked':''} onchange="toggleRow(${i});updateTotal()">
+      <input id="rname-${i}" value="${(r.name||'').replace(/"/g,'&quot;')}" style="font-size:12px;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;width:100%">
+      <input id="rqty-${i}" type="number" min="0.001" step="any" value="${r.qty||1}"
+        oninput="updateRowTotal(${i})"
+        style="font-size:12px;text-align:right;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;width:100%">
+      <input id="rcost-${i}" type="number" min="0" step="any" value="${r.unit_cost||0}"
+        oninput="updateRowTotal(${i})"
+        style="font-size:12px;text-align:right;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;width:100%">
+      <div style="font-weight:700;color:#2563eb;font-size:12px;text-align:right" id="rtotal-${i}">
+        ${fmt((r.qty||1)*(r.unit_cost||0))}
+      </div>
+      <span class="badge ${r._match?.action==='update_stock'?'badge-green':'badge-blue'}" style="font-size:10px">
+        ${r._match?.action==='update_stock'?'✓ Mavjud':'+ Yangi'}
+      </span>
     </div>`).join('');
 
   document.body.insertAdjacentHTML('beforeend',`
   <div class="modal-bg" id="review-modal">
-    <div class="modal" style="max-width:680px">
+    <div class="modal" style="max-width:760px">
       <div class="modal-header">
-        <h3>👁 Kirim Tekshiruvi — ${rows.length} ta qator</h3>
-        <button class="btn btn-gray" onclick="document.getElementById('review-modal').remove()">✕</button>
+        <div>
+          <h3>👁 Kirim Tekshiruvi</h3>
+          <div style="font-size:12px;color:#64748b;margin-top:2px">
+            ${rows.length} ta qator &nbsp;|&nbsp;
+            Manba: <b>${(draft.source||'').toUpperCase()}</b>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="text-align:right">
+            <div style="font-size:11px;color:#64748b">Jami summa</div>
+            <div id="review-total" style="font-size:18px;font-weight:800;color:#2563eb">${fmt(totalJami)}</div>
+          </div>
+          <button class="btn btn-gray" onclick="document.getElementById('review-modal').remove()">✕</button>
+        </div>
       </div>
-      <div class="modal-body" style="padding:16px">
-        <div style="background:#eff6ff;border-radius:8px;padding:10px;font-size:12px;color:#1d4ed8;margin-bottom:12px">
-          ✅ Tasdiqlangan qatorlar bazaga yoziladi. Belgi oling yoki tahrirlang.
+      <div class="modal-body" style="padding:12px">
+        <div style="background:#eff6ff;border-radius:8px;padding:8px 12px;font-size:12px;color:#1d4ed8;margin-bottom:10px">
+          🤖 Claude Vision tomonidan aniqlandi. Noto'g'ri ma'lumotlarni <b>tahrirlang</b>, keyin tasdiqlang.
         </div>
-        <div class="review-row hdr">
-          <span>✓</span><span>Mahsulot nomi</span><span style="text-align:right">Miqdor</span>
-          <span style="text-align:right">Tannarx</span><span style="text-align:right">Jami</span><span>Holat</span>
+        <!-- Jadval sarlavhasi -->
+        <div style="display:grid;grid-template-columns:auto 1fr 80px 100px 110px 70px;gap:6px;align-items:center;
+                    padding:6px 8px;background:#f1f5f9;border-radius:6px;font-size:11px;font-weight:600;
+                    color:#64748b;text-transform:uppercase;margin-bottom:4px">
+          <span>✓</span><span>Mahsulot nomi</span>
+          <span style="text-align:right">Miqdor</span>
+          <span style="text-align:right">Narx (so'm)</span>
+          <span style="text-align:right">Jami</span>
+          <span style="text-align:center">Holat</span>
         </div>
-        <div style="max-height:320px;overflow-y:auto">${rowHtml}</div>
+        <div style="max-height:380px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px">
+          ${rowHtml}
+        </div>
       </div>
       <div class="modal-footer" style="justify-content:space-between">
-        <button class="btn btn-red" onclick="rejectDraft('${id}')">❌ Rad etish</button>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-gray" onclick="document.getElementById('review-modal').remove()">Bekor</button>
-          <button class="btn btn-green" onclick="approveDraft('${id}',${rows.length})">✅ Tasdiqlash</button>
+          <button class="btn btn-gray" style="font-size:12px" onclick="checkAll(true)">✅ Barchasini belgilash</button>
+          <button class="btn btn-gray" style="font-size:12px" onclick="checkAll(false)">☐ Barchasini olib tashlash</button>
         </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-red" onclick="rejectDraft('${id}')">❌ Rad etish</button>
+          <button class="btn btn-gray" onclick="document.getElementById('review-modal').remove()">Bekor</button>
+          <button class="btn btn-green" style="padding:8px 24px;font-size:14px" onclick="approveDraft('${id}',${rows.length})">
+            ✅ Tasdiqlash va saqlash
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`);
+  window._draftRows = rows;
+}
       </div>
     </div>
   </div>`);
@@ -624,23 +759,63 @@ async function reviewDraft(id) {
 
 function toggleRow(i){
   const el = document.getElementById(`row-${i}`);
-  el.style.opacity = document.getElementById(`chk-${i}`).checked ? '1' : '0.4';
+  const checked = document.getElementById(`chk-${i}`).checked;
+  el.style.opacity = checked ? '1' : '0.4';
+}
+
+// Qator narxi o'zgarganda jami yangilash
+function updateRowTotal(i) {
+  const qty  = parseFloat(document.getElementById(`rqty-${i}`)?.value) || 0;
+  const cost = parseFloat(document.getElementById(`rcost-${i}`)?.value) || 0;
+  const el   = document.getElementById(`rtotal-${i}`);
+  if (el) el.textContent = fmt(qty * cost);
+  updateTotal();
+}
+
+// Barcha belgilangan qatorlarning umumiy summasini hisoblash
+function updateTotal() {
+  const rows = window._draftRows || [];
+  let total = 0;
+  rows.forEach((_,i) => {
+    if (!document.getElementById(`chk-${i}`)?.checked) return;
+    const qty  = parseFloat(document.getElementById(`rqty-${i}`)?.value) || 0;
+    const cost = parseFloat(document.getElementById(`rcost-${i}`)?.value) || 0;
+    total += qty * cost;
+  });
+  const el = document.getElementById('review-total');
+  if (el) el.textContent = fmt(total);
+}
+
+// Barchasini belgilash / olib tashlash
+function checkAll(state) {
+  const rows = window._draftRows || [];
+  rows.forEach((_,i) => {
+    const chk = document.getElementById(`chk-${i}`);
+    if (chk) { chk.checked = state; toggleRow(i); }
+  });
+  updateTotal();
 }
 
 async function approveDraft(id, count) {
   const reviewed = window._draftRows.map((r,i)=>({
     ...r,
-    name:     document.getElementById(`rname-${i}`)?.value || r.name,
-    qty:      parseFloat(document.getElementById(`rqty-${i}`)?.value)||r.qty,
-    unit_cost:parseFloat(document.getElementById(`rcost-${i}`)?.value)||r.unit_cost,
-    approved: document.getElementById(`chk-${i}`)?.checked !== false,
-    total_cost: (parseFloat(document.getElementById(`rqty-${i}`)?.value)||r.qty) * (parseFloat(document.getElementById(`rcost-${i}`)?.value)||r.unit_cost)
+    name:      document.getElementById(`rname-${i}`)?.value || r.name,
+    qty:       parseFloat(document.getElementById(`rqty-${i}`)?.value)  || r.qty,
+    unit_cost: parseFloat(document.getElementById(`rcost-${i}`)?.value) || r.unit_cost,
+    approved:  document.getElementById(`chk-${i}`)?.checked !== false,
+    total_cost:(parseFloat(document.getElementById(`rqty-${i}`)?.value)||r.qty) *
+               (parseFloat(document.getElementById(`rcost-${i}`)?.value)||r.unit_cost)
   }));
+
+  const approvedCount = reviewed.filter(r=>r.approved).length;
+  const totalCost = reviewed.filter(r=>r.approved).reduce((s,r)=>s+r.total_cost,0);
+
   const warehouses = await api('GET','/warehouses');
   const wid = warehouses[0]?.id || 'wh-001';
   const res = await api('POST',`/intake/drafts/${id}/approve`,{reviewed_rows:reviewed,warehouse_id:wid});
   document.getElementById('review-modal')?.remove();
-  toast(`✅ ${res.items_count} ta tovar saqlandi! Chek: ${res.receipt_number}`);
+
+  toast(`✅ ${res.items_count||approvedCount} ta tovar bazaga saqlandi! Jami: ${fmt(res.total_cost||totalCost)}`);
   intake();
 }
 async function rejectDraft(id){
